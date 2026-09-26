@@ -1,0 +1,244 @@
+{
+  "theme": "dark",
+  "archetype": "LUXURY & PERFORMANCE PRO HYBRID (Deep Obsidian, Electric Purple & Neon Indigo)",
+  "colors": {
+    "surfaces": [
+      {
+        "name": "page",
+        "kind": "solid",
+        "bg": "#0B0B10",
+        "on_bg": "#F5F3FF",
+        "on_bg_muted": "#9E9EBA",
+        "roles": {
+          "link": "#A78BFA",
+          "error": "#F87171",
+          "success": "#34D399",
+          "warning": "#FBBF24"
+        }
+      },
+      {
+        "name": "sidebar",
+        "kind": "solid",
+        "bg": "#0E0E17",
+        "on_bg": "#EDEDF8",
+        "on_bg_muted": "#9494B8",
+        "roles": {
+          "active_indicator": "#8B5CF6",
+          "badge_bg": "#1C1A2E",
+          "badge_text": "#DDD6FE"
+        }
+      },
+      {
+        "name": "panel",
+        "kind": "solid",
+        "bg": "#13121F",
+        "on_bg": "#F8FAFC",
+        "on_bg_muted": "#A1A1C2",
+        "roles": {
+          "border": "#282545",
+          "hover_bg": "#1B192E"
+        }
+      },
+      {
+        "name": "card_elevated",
+        "kind": "solid",
+        "bg": "#18162A",
+        "on_bg": "#FFFFFF",
+        "on_bg_muted": "#A5A6C8",
+        "roles": {
+          "border": "#36325C",
+          "highlight": "#A855F7"
+        }
+      },
+      {
+        "name": "glass_header",
+        "kind": "glass",
+        "contrast_against": "#0E0E18",
+        "guarantee": "backdrop-blur-xl bg-[#0B0B10]/85 border-b border-purple-500/15 shadow-[0_4px_30px_rgba(0,0,0,0.5)]",
+        "on_bg": "#F5F3FF",
+        "on_bg_muted": "#A3A3C2"
+      },
+      {
+        "name": "hero",
+        "kind": "gradient",
+        "contrast_against": "#0B0B12",
+        "guarantee": "bg-[radial-gradient(ellipse_80%_60%_at_50%_-20%,rgba(120,50,230,0.22),rgba(11,11,16,1))]",
+        "on_bg": "#FFFFFF",
+        "on_bg_muted": "#A8A8CB"
+      },
+      {
+        "name": "browser_chrome",
+        "kind": "solid",
+        "bg": "#161528",
+        "on_bg": "#EDEDFC",
+        "on_bg_muted": "#9696BC",
+        "roles": {
+          "url_pill": "#0F0E1D",
+          "control_red": "#EF4444",
+          "control_yellow": "#F59E0B",
+          "control_green": "#10B981"
+        }
+      },
+      {
+        "name": "question_card",
+        "kind": "solid",
+        "bg": "#151326",
+        "on_bg": "#F8FAFC",
+        "on_bg_muted": "#A3A4C7",
+        "roles": {
+          "option_idle": "#1F1C38",
+          "option_selected": "#4C1D95",
+          "option_selected_border": "#A855F7",
+          "option_selected_text": "#FFFFFF"
+        }
+      },
+      {
+        "name": "quota_pill",
+        "kind": "solid",
+        "bg": "#1A1533",
+        "on_bg": "#DDD6FE",
+        "on_bg_muted": "#A78BFA"
+      }
+    ],
+    "accent": "#8B5CF6",
+    "accent_hover": "#7C3AED",
+    "accent_glow": "rgba(139, 92, 246, 0.45)",
+    "on_accent": "#FFFFFF",
+    "violet_secondary": "#C084FC",
+    "border_subtle": "#25223D",
+    "border_glow": "rgba(168, 85, 247, 0.3)"
+  },
+  "typography": {
+    "fonts": {
+      "heading": "'Sora Variable', sans-serif",
+      "body": "'DM Sans Variable', sans-serif",
+      "mono": "'JetBrains Mono Variable', monospace"
+    },
+    "scale_px": {
+      "display": 56,
+      "h1": 42,
+      "h2": 32,
+      "h3": 22,
+      "body": 16,
+      "caption": 14
+    },
+    "rules": {
+      "headings": "font-heading tracking-tight font-semibold text-white",
+      "hero_title": "font-heading text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-white via-purple-100 to-purple-400",
+      "body": "font-sans text-base leading-relaxed text-slate-200",
+      "labels": "font-mono uppercase text-xs tracking-[0.18em] text-purple-300 font-medium"
+    }
+  },
+  "entry_surfaces": {
+    "/": "direct landing hero — animated violet star & rotating senior-architect pitch top-center, giant prompt box + drag-and-drop file attachment dock center, quick prompt presets below, seamlessly morphs into live full-height chat workspace on first message with collapsible history sidebar left and responsive interactive canvas right"
+  },
+  "visual_enhancers": {
+    "star_animation": "Shimmering SVG 4-point / 8-point geometric star with rotating aura, pulsed glow animation (CSS keyframes + motion/react), particle sparkles",
+    "glass_panels": "backdrop-blur-2xl bg-[#13121F]/80 border border-purple-500/20 shadow-[0_8px_32px_0_rgba(0,0,0,0.45)] ring-1 ring-white/5",
+    "tracing_beam": "Subtle radiant gradient border on active prompt input and delivery preview cards",
+    "fake_browser": "Mac-styled window chrome with 3 colored status dots (red, amber, emerald), SSL lock badge, responsive viewport switcher buttons (Desktop 100%, Tablet 768px, Mobile 375px), refresh button, live sandbox iframe wrapper",
+    "rotating_phrases": [
+      "Describe your site, I build the full production HTML.",
+      "A high-converting SaaS landing page with dark luxury DNA.",
+      "An avant-garde portfolio for an architect with brutalist typography.",
+      "A high-end restaurant menu with warm glassmorphism & reservations.",
+      "An interactive event showcase with live schedule & speaker grid."
+    ]
+  },
+  "grids_and_layouts": {
+    "app_structure": "h-screen w-screen overflow-hidden flex flex-col bg-[#0B0B10] text-slate-100",
+    "main_split": "flex-1 flex overflow-hidden relative",
+    "sidebar": {
+      "desktop": "w-72 border-r border-[#221F38] bg-[#0E0E17] flex flex-col shrink-0 transition-all duration-300",
+      "mobile": "fixed inset-y-0 left-0 z-50 w-80 bg-[#0E0E17]/95 backdrop-blur-2xl border-r border-purple-500/20 shadow-2xl transition-transform duration-300"
+    },
+    "chat_workspace": "flex-1 flex flex-col h-full overflow-hidden relative max-w-5xl mx-auto w-full px-4 sm:px-6 py-4",
+    "delivery_card": "w-full rounded-2xl overflow-hidden border border-purple-500/30 bg-[#141224] shadow-2xl flex flex-col my-4",
+    "iframe_viewport": "w-full transition-all duration-300 rounded-b-xl border-t border-[#25223D] bg-white h-[480px] sm:h-[580px]"
+  },
+  "motion": {
+    "reduced_motion_support": "prefers-reduced-motion: reduce respected via CSS media queries and motion/react layout transition switches",
+    "hero_entrance": {
+      "initial": { "opacity": 0, "y": 20 },
+      "animate": { "opacity": 1, "y": 0 },
+      "transition": { "duration": 0.5, "ease": [0.16, 1, 0.3, 1] }
+    },
+    "bubble_entrance": {
+      "initial": { "opacity": 0, "y": 14, "scale": 0.98 },
+      "animate": { "opacity": 1, "y": 0, "scale": 1 },
+      "transition": { "duration": 0.35, "ease": "easeOut" }
+    },
+    "star_pulse": "animate-pulse duration-1000",
+    "button_micro_interaction": "active:scale-[0.98] transition-transform duration-150 ease-out"
+  },
+  "accessibility": {
+    "contrast_compliance": "All normal text tokens maintain minimum 4.5:1 APCA/WCAG ratio against solid & glass surfaces; interactive buttons maintain minimum 3:1 boundary contrast",
+    "keyboard_navigation": "Full tab ordering on interactive choice chips, textarea triggers, sidebar history toggles, modal dialogs, and action bars",
+    "aria_roles": "aria-live='polite' for AI generation stream states; role='region' for iframe live container; role='radiogroup' for multi-choice questionnaire cards",
+    "test_ids": "Every primary interaction and UI element contains structured kebab-case data-testid attributes"
+  },
+  "components": {
+    "header": {
+      "path": "frontend/src/components/Header.tsx",
+      "description": "Sticky glass header with animated glowing star logo ('Level IA v3 - Architect Mode'), daily quota pill ('18/20 left today'), new project button, mobile sidebar hamburger toggle, and live status badge."
+    },
+    "sidebar": {
+      "path": "frontend/src/components/Sidebar.tsx",
+      "description": "Collapsible history drawer showing past generated sites with timestamp, style tag (Dark Luxe, Swiss Brutalism, Editorial, etc.), preview thumbnail badge, delete/rename actions, and quota recap."
+    },
+    "hero_input": {
+      "path": "frontend/src/components/HeroPromptInput.tsx",
+      "description": "Massive central prompt module featuring dynamic typing placeholder, drag & drop zone for images/PDFs/code (<=5MB), style presets pills ('Dark Luxe SaaS', 'Swiss Editorial', 'Chic Brutalism', 'Glassmorphism Studio'), and glowing violet generate button."
+    },
+    "chat_stream": {
+      "path": "frontend/src/components/ChatWorkspace.tsx",
+      "description": "Conversation container managing user requests, AI architect thinking states, multi-choice question cards, generation progress indicator, and final site ready delivery cards."
+    },
+    "questionnaire_card": {
+      "path": "frontend/src/components/QuestionCard.tsx",
+      "description": "Interactive multiple-choice card presenting 2-3 strategic architect questions (e.g. Design DNA style, Color Palette mood, Key Target Audience) with clickable pill options and 'Launch Generation' trigger."
+    },
+    "site_delivery_card": {
+      "path": "frontend/src/components/SiteDeliveryCard.tsx",
+      "description": "The crown jewel 'Site Ready' card featuring a fake macOS browser chrome, live interactive iframe rendered from sandboxed HTML, responsive preview tabs (Desktop/Tablet/Mobile), fullscreen modal preview, 'Download .html' button, and 'Request Refinement' prompt input."
+    },
+    "quota_modal": {
+      "path": "frontend/src/components/QuotaExceededModal.tsx",
+      "description": "An ultra-luxurious dark violet modal shown when the 20 messages/day limit is hit, detailing quota reset countdown and allowing export of existing projects."
+    }
+  },
+  "image_urls": {
+    "avatars": [
+      {
+        "category": "user_avatar",
+        "url": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80",
+        "description": "User profile avatar for chat bubble"
+      }
+    ],
+    "sample_site_previews": [
+      {
+        "category": "dark_luxe_template",
+        "url": "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=800&q=80",
+        "description": "Abstract fluid dark violet render for Dark Luxe theme background"
+      },
+      {
+        "category": "modern_tech_template",
+        "url": "https://images.unsplash.com/photo-1634017839464-5c339ebe3cb4?auto=format&fit=crop&w=800&q=80",
+        "description": "Futuristic 3D iridescent crystal glass texture"
+      }
+    ]
+  },
+  "instructions_to_main_agent": [
+    "Template is farm-ts (FastAPI backend + Vite React 19 frontend with Tailwind v4 CSS-first theming).",
+    "Configure index.css with @import '@fontsource-variable/sora'; and @import '@fontsource-variable/dm-sans'; and @import '@fontsource-variable/jetbrains-mono';",
+    "Strictly enforce the 'No Visible Code' rule: The user only interacts with human-oriented design prompts, multiple-choice architect cards, and the live interactive iframe preview.",
+    "The AI Senior Architect system prompt must be strictly locked to web architecture & full production HTML generation (landing, portfolio, showcase, event, CV) and politely refuse unrelated queries.",
+    "Include a rich library of design DNA generators (Dark Luxe, Swiss Minimalist, Glassmorphism Aurora, Chic Brutalism, Editorial Serif, Cyber Neon) that output complete, responsive, self-contained single-file HTML documents with inline Tailwind CDN, Google Fonts, and Lucide/FontAwesome icons.",
+    "Implement the live 20 msg/day quota tracker with local storage persistence and mock/backend synchronization + beautiful countdown UI.",
+    "Add full Drag & Drop + file input support for images (PNG, JPG, WebP), PDFs, and code/text files (<= 5MB) with clear preview chips.",
+    "Provide responsive iframe preview controls: Desktop (100%), Tablet (768px), and Mobile (375px) device frames.",
+    "Provide one-click 'Download .html' with auto-generated filename based on the user's project name (e.g. `level-ia-portfolio-pro.html`).",
+    "All interactive elements MUST include distinct `data-testid` attributes (e.g. `data-testid='hero-prompt-textarea'`, `data-testid='generate-btn'`, `data-testid='download-html-btn'`, `data-testid='viewport-mobile-btn'`, `data-testid='question-choice-card'`, `data-testid='sidebar-history-item'`).",
+    "Ensure dark mode is permanent by having the root/html configured for dark theme, using rich violet glows, deep obsidian surfaces (#0B0B10), and crystal glass headers."
+  ]
+}
