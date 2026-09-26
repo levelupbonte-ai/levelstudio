@@ -22,6 +22,7 @@ INDEXES: dict[str, list[IndexModel]] = {
     "projects": [
         IndexModel([("id", ASCENDING)], name="id", unique=True),
         IndexModel([("updated_at", DESCENDING)], name="updated_desc"),
+        IndexModel([("share_token", ASCENDING)], name="share_token", sparse=True),
     ],
     "usage": [IndexModel([("day", ASCENDING)], name="day", unique=True)],
 }

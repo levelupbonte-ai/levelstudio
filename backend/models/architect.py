@@ -32,6 +32,7 @@ class Question(BaseModel):
     id: str = Field(default_factory=_uid)
     label: str
     options: List[Choice] = Field(default_factory=list)
+    multi: bool = False
     allow_custom: bool = True
 
 
@@ -54,9 +55,19 @@ class Project(BaseModel):
     style: Optional[str] = None
     html: Optional[str] = None
     generating: bool = False
+    progress: Optional[str] = None
+    progress_step: int = 0
+    share_token: Optional[str] = None
+    share_expires_at: Optional[datetime] = None
     messages: List[Message] = Field(default_factory=list)
     created_at: datetime = Field(default_factory=_now)
     updated_at: datetime = Field(default_factory=_now)
+
+
+class ShareLink(BaseModel):
+    url: str
+    path: str
+    expires_at: datetime
 
 
 class ProjectSummary(BaseModel):

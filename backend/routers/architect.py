@@ -2,6 +2,8 @@
 
 import asyncio
 import logging
+import os
+import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Set
 
@@ -10,6 +12,7 @@ from fastapi.responses import HTMLResponse
 
 from lib.architect_brain import run_architect
 from lib.db import db
+from lib.html_post import harden_images
 from models.architect import (
     ChatRequest,
     ChatResponse,
@@ -19,6 +22,7 @@ from models.architect import (
     Question,
     Choice,
     Quota,
+    ShareLink,
 )
 
 logger = logging.getLogger(__name__)
@@ -28,6 +32,37 @@ DAILY_LIMIT = 20
 
 # Strong refs to in-flight background builds so the loop cannot garbage-collect them mid-run.
 _JOBS: Set["asyncio.Task[None]"] = set()
+# project_id -> running build task, so the user can stop a build.
+_RUNNING: Dict[str, "asyncio.Task[None]"] = {}
+
+SHARE_DAYS = 7
+
+STAGES = [
+    "Reading your brief",
+    "Choosing the design direction",
+    "Laying out the navigation and hero",
+    "Writing the page sections",
+    "Building the interactive screens",
+    "Tuning the mobile layout",
+    "Final polish",
+]
+
+
+async def _set_progress(project_id: str, step: int) -> None:
+    step = max(0, min(step, len(STAGES) - 1))
+    await db.projects.update_one(
+        {"id": project_id}, {"$set": {"progress": STAGES[step], "progress_step": step}}
+    )
+
+
+async def _progress_ticker(project_id: str) -> None:
+    """Walks the build stages while the model works, so the wait shows real movement."""
+    try:
+        for step in range(len(STAGES)):
+            await _set_progress(project_id, step)
+            await asyncio.sleep(16)
+    except asyncio.CancelledError:
+        raise
 
 
 def _today() -> str:
@@ -127,6 +162,72 @@ async def get_project_html(project_id: str) -> HTMLResponse:
     return HTMLResponse(content=project.html)
 
 
+QUOTA_MESSAGE = (
+    "We have reached the studio's build budget for today. Every project you started is saved in the "
+    "sidebar, so you can keep reviewing its live preview and share links. Come back tomorrow and I "
+    "will pick up exactly where we left off, or contact LevelUp Studio to turn one of these previews "
+    "into your real website right away."
+)
+
+
+@router.post("/projects/{project_id}/stop", response_model=Project)
+async def stop_build(project_id: str) -> Project:
+    project = await _load(project_id)
+    task = _RUNNING.pop(project_id, None)
+    if task and not task.done():
+        task.cancel()
+    project.generating = False
+    project.progress = None
+    project.progress_step = 0
+    project.messages.append(
+        Message(
+            role="assistant",
+            kind="text",
+            text="Build stopped. Tell me what to change and I will start again.",
+        )
+    )
+    project.updated_at = datetime.now(timezone.utc)
+    await db.projects.replace_one({"id": project.id}, project.model_dump(), upsert=True)
+    return project
+
+
+@router.post("/projects/{project_id}/share", response_model=ShareLink)
+async def create_share_link(project_id: str) -> ShareLink:
+    project = await _load(project_id)
+    if not project.html:
+        raise HTTPException(status_code=404, detail="No site generated yet")
+
+    now = datetime.now(timezone.utc)
+    expires = project.share_expires_at
+    if expires is not None and expires.tzinfo is None:
+        expires = expires.replace(tzinfo=timezone.utc)
+    if not project.share_token or expires is None or expires <= now:
+        project.share_token = uuid.uuid4().hex
+        expires = now + timedelta(days=SHARE_DAYS)
+        await db.projects.update_one(
+            {"id": project_id},
+            {"$set": {"share_token": project.share_token, "share_expires_at": expires}},
+        )
+
+    path = f"/api/share/{project.share_token}"
+    base = os.environ.get("APP_URL", "").rstrip("/")
+    return ShareLink(url=f"{base}{path}" if base else path, path=path, expires_at=expires)
+
+
+@router.get("/share/{token}", response_class=HTMLResponse)
+async def shared_site(token: str) -> HTMLResponse:
+    doc = await db.projects.find_one({"share_token": token}, {"_id": 0})
+    if not doc or not doc.get("html"):
+        raise HTTPException(status_code=404, detail="This preview link does not exist")
+    expires = doc.get("share_expires_at")
+    if isinstance(expires, datetime):
+        if expires.tzinfo is None:
+            expires = expires.replace(tzinfo=timezone.utc)
+        if expires <= datetime.now(timezone.utc):
+            raise HTTPException(status_code=410, detail="This preview link has expired")
+    return HTMLResponse(content=doc["html"], headers={"X-Robots-Tag": "noindex, nofollow"})
+
+
 async def _generate(project_id: str, transcript: List[Dict[str, Any]], images: List[Dict[str, str]]) -> None:
     """Runs the architect off the request cycle — a full build takes longer than any HTTP timeout."""
     try:
@@ -134,16 +235,28 @@ async def _generate(project_id: str, transcript: List[Dict[str, Any]], images: L
     except HTTPException:
         return
 
+    ticker = asyncio.create_task(_progress_ticker(project_id))
     reply = Message(role="assistant", kind="error", text="")
+    result: Dict[str, Any] | None = None
     try:
         result = await run_architect(project_id, transcript, project.html, images)
+    except asyncio.CancelledError:
+        ticker.cancel()
+        await db.projects.update_one(
+            {"id": project_id}, {"$set": {"generating": False, "progress": None, "progress_step": 0}}
+        )
+        raise
     except Exception as exc:  # noqa: BLE001
         logger.exception("architect call failed")
         reply.text = (
-            "The studio hit a snag reaching the design engine. Send your request again in a moment."
+            "The studio could not reach the design engine just now. Send your request again and I "
+            "will pick it straight back up."
         )
         logger.error("architect error detail: %s", exc)
-        result = None
+    finally:
+        ticker.cancel()
+
+    project = await _load(project_id)  # re-read: the ticker wrote progress fields
 
     if result is not None:
         kind = result.get("kind", "refusal")
@@ -152,16 +265,22 @@ async def _generate(project_id: str, transcript: List[Dict[str, Any]], images: L
 
         if kind == "questions":
             questions: List[Question] = []
-            for raw_q in result.get("questions", [])[:3]:
+            for raw_q in result.get("questions", [])[:5]:
                 options = [Choice(label=str(o)) for o in (raw_q.get("options") or [])[:5]]
-                questions.append(Question(label=str(raw_q.get("label", "")), options=options))
+                questions.append(
+                    Question(
+                        label=str(raw_q.get("label", "")),
+                        options=options,
+                        multi=bool(raw_q.get("multi", False)),
+                    )
+                )
             reply.kind = "questions"
             reply.questions = questions
             if not reply.text:
-                reply.text = "A couple of quick decisions before I build."
+                reply.text = "A few quick decisions before I build."
         elif kind == "site" and result.get("html"):
             reply.kind = "site"
-            reply.html = str(result["html"])
+            reply.html = harden_images(str(result["html"]))
             reply.site_name = str(result.get("title") or project.title)
             reply.site_style = str(result.get("style") or "")
             if not reply.text:
@@ -177,6 +296,8 @@ async def _generate(project_id: str, transcript: List[Dict[str, Any]], images: L
 
     project.messages.append(reply)
     project.generating = False
+    project.progress = None
+    project.progress_step = 0
     project.updated_at = datetime.now(timezone.utc)
     await db.projects.replace_one({"id": project.id}, project.model_dump(), upsert=True)
 
@@ -188,7 +309,7 @@ async def chat(payload: ChatRequest) -> ChatResponse:
 
     current = await _quota()
     if current.remaining <= 0:
-        raise HTTPException(status_code=429, detail="Daily quota reached")
+        raise HTTPException(status_code=429, detail=QUOTA_MESSAGE)
 
     project = await _load(payload.project_id) if payload.project_id else Project()
     if project.generating:
@@ -224,11 +345,15 @@ async def chat(payload: ChatRequest) -> ChatResponse:
     if project.title == "New project" and user_text:
         project.title = user_text[:48]
     project.generating = True
+    project.progress = STAGES[0]
+    project.progress_step = 0
     project.updated_at = datetime.now(timezone.utc)
     await db.projects.replace_one({"id": project.id}, project.model_dump(), upsert=True)
 
     quota = await _quota(consume=True)
     task = asyncio.create_task(_generate(project.id, transcript, images))
     _JOBS.add(task)
+    _RUNNING[project.id] = task
     task.add_done_callback(_JOBS.discard)
+    task.add_done_callback(lambda t, pid=project.id: _RUNNING.pop(pid, None))
     return ChatResponse(project=project, quota=quota)

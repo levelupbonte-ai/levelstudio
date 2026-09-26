@@ -16,6 +16,7 @@ export interface Question {
   id: string;
   label: string;
   options: Choice[];
+  multi: boolean;
   allow_custom: boolean;
 }
 
@@ -38,6 +39,10 @@ export interface Project {
   style: string | null;
   html: string | null;
   generating: boolean;
+  progress: string | null;
+  progress_step: number;
+  share_token: string | null;
+  share_expires_at: string | null;
   messages: Message[];
   created_at: string;
   updated_at: string;
@@ -62,4 +67,10 @@ export interface Quota {
 export interface ChatResponse {
   project: Project;
   quota: Quota;
+}
+
+export interface ShareLink {
+  url: string;
+  path: string;
+  expires_at: string;
 }

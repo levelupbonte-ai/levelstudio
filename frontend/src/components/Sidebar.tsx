@@ -66,7 +66,7 @@ export default function Sidebar({
         Recent
       </p>
 
-      <div className="flex-1 overflow-y-auto scroll-slim px-2 pb-6">
+      <div className="flex-1 overflow-y-auto no-scrollbar px-2 pb-6">
         {loading && (
           <div className="flex items-center gap-2 px-3 py-4 text-sm text-slate-500">
             <Loader2 className="size-4 animate-spin" /> Loading…

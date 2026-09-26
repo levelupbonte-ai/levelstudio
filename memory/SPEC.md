@@ -43,13 +43,27 @@ saves the user turn, sets `generating=true`, returns immediately and spawns an a
 
 ## Key UI decisions
 - Wordmark `LevelUpStudio` (no logo icon, no animated star).
-- Assistant prose rendered as Markdown (`components/Markdown.tsx`), no chat bubbles; only user turns
-  are bubbles.
-- No quota counter anywhere.
-- Delivery card: fake macOS browser chrome, sandboxed iframe, Desktop/Tablet/Mobile, reload,
-  Fullscreen, Open preview (blob tab), Request a change. **No download button — by design.**
-- Hero: "What are we building today?", rotating placeholders, service catalogue chips, drag & drop
-  (images → vision, text/code inlined, ≤5 MB).
+- Assistant prose rendered as Markdown (`components/Markdown.tsx`); only user turns are bubbles.
+- No quota counter anywhere. On 429 the backend returns a professional message in `detail` which is
+  rendered as an assistant note (`data-testid="quota-notice"`).
+- Service catalogue is a horizontal rail with arrows (`ServiceRail.tsx`), no icons. Picking a service
+  **attaches a chip** to the composer instead of starting a build; the user then adds their own text.
+- Questions arrive as a **panel above the composer** (`QuestionPanel.tsx`): 4-5 questions, single or
+  multi select (`Question.multi`), plus a free-text "My own answer" per question.
+- Composer: paperclip opens a popover to choose Image or File, stop button replaces send while a
+  build runs, rotating hints render inline **bold**.
+- Delivery is a **file card**: thumbnail, `<slug>.html`, style, section count, size, then Live
+  preview (fullscreen with Desktop/Tablet/Mobile), Open in a tab, Copy link, Request a change.
+  **No download button — by design.**
+- Share link: `POST /projects/{id}/share` mints a token valid 7 days, served by `GET /api/share/{token}`
+  with `X-Robots-Tag: noindex` (410 once expired).
+- Build progress: backend walks `STAGES` (7 steps) writing `progress`/`progress_step`; the client
+  polls and ticks them off one by one. `POST /projects/{id}/stop` cancels the running task.
+- Generated HTML is post-processed in `lib/html_post.py`: Tailwind CDN `<link>` rewritten to the
+  required `<script>` (a `<link>` leaves the page completely unstyled), Unsplash URLs rewritten to
+  seeded `picsum.photos`, and an `img` error handler injected that swaps a broken image for an
+  "Image not found" placeholder.
+- All scrollbars hidden app-wide (`no-scrollbar` + global rules in `index.css`).
 
 ## Auth
 None — the app is open, no login.

@@ -1,109 +1,36 @@
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import {
-  CalendarCheck,
-  Camera,
-  Clock,
-  Link2,
-  Loader2,
-  Menu,
-  Plus,
-  Scissors,
-  ShoppingBag,
-  Sparkles,
-  UtensilsCrossed,
-  Wand2,
-} from "lucide-react";
+import { Check, Loader2, Menu, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { Toaster } from "@/components/ui/sonner";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import Composer from "@/components/Composer";
+import Composer, { type Chip } from "@/components/Composer";
 import Markdown from "@/components/Markdown";
-import QuestionCard from "@/components/QuestionCard";
+import QuestionPanel from "@/components/QuestionPanel";
+import ServiceRail, { type Service } from "@/components/ServiceRail";
 import SiteDeliveryCard from "@/components/SiteDeliveryCard";
 import Sidebar from "@/components/Sidebar";
 import { ApiError, apiDelete, apiGet, apiPost } from "@/lib/api";
 import type { Attachment, ChatResponse, Message, Project, ProjectSummary, Quota } from "@/lib/types";
 
-const SERVICES = [
-  {
-    id: "barbershop",
-    label: "Barbershop",
-    Icon: Scissors,
-    prompt:
-      "A barbershop website with 24/7 chair booking, barber profiles, price list and local Google Maps visibility.",
-  },
-  {
-    id: "salon",
-    label: "Hair & beauty",
-    Icon: Sparkles,
-    prompt:
-      "A hair and beauty salon website with stylist portfolios, a clear price grid and service scheduling.",
-  },
-  {
-    id: "store",
-    label: "Online store",
-    Icon: ShoppingBag,
-    prompt:
-      "An online store to sell products and merch, with categories, best sellers and a secure checkout experience.",
-  },
-  {
-    id: "booking",
-    label: "Online booking",
-    Icon: CalendarCheck,
-    prompt:
-      "An online booking site to manage appointments, staff and clients with a calendar-style scheduler.",
-  },
-  {
-    id: "restaurant",
-    label: "Restaurant & café",
-    Icon: UtensilsCrossed,
-    prompt:
-      "A restaurant website with an interactive mobile menu, table reservation and one-tap GPS directions.",
-  },
-  {
-    id: "portfolio",
-    label: "Portfolio",
-    Icon: Camera,
-    prompt:
-      "An ultra-fast online portfolio to showcase my work and creations on my own personal brand.",
-  },
-  {
-    id: "creator",
-    label: "Creator & media",
-    Icon: Link2,
-    prompt:
-      "A creator site with an independent link-in-bio page, an interactive media kit for brand partnerships and email capture.",
-  },
-  {
-    id: "landing",
-    label: "Landing page",
-    Icon: Wand2,
-    prompt: "A modern, high-converting landing page built to turn visitors into leads.",
-  },
-  {
-    id: "events",
-    label: "Events & pop-ups",
-    Icon: Clock,
-    prompt:
-      "An event website with RSVP, ticketing, full schedule and galleries for a pop-up launch weekend.",
-  },
+// Mirrors STAGES in backend/routers/architect.py
+const STAGES = [
+  "Reading your brief",
+  "Choosing the design direction",
+  "Laying out the navigation and hero",
+  "Writing the page sections",
+  "Building the interactive screens",
+  "Tuning the mobile layout",
+  "Final polish",
 ];
 
 export default function Home() {
   const qc = useQueryClient();
   const [activeId, setActiveId] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [quotaOpen, setQuotaOpen] = useState(false);
-  const [pending, setPending] = useState<string | null>(null);
+  const [picked, setPicked] = useState<Service[]>([]);
+  const [quotaNotice, setQuotaNotice] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const composerRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const quotaQuery = useQuery({ queryKey: ["quota"], queryFn: () => apiGet<Quota>("/quota") });
 
@@ -116,7 +43,7 @@ export default function Home() {
     queryKey: ["project", activeId],
     queryFn: () => apiGet<Project>(`/projects/${activeId}`),
     enabled: Boolean(activeId),
-    // The build runs server-side and outlives any single request: poll while it works.
+    // The build runs server side and outlives any single request, so poll while it works.
     refetchInterval: (query) => (query.state.data?.generating ? 2500 : false),
   });
 
@@ -128,16 +55,19 @@ export default function Home() {
         attachments: vars.attachments,
       }),
     onSuccess: (res) => {
-      setPending(null);
+      setPicked([]);
       setActiveId(res.project.id);
       qc.setQueryData(["project", res.project.id], res.project);
       qc.setQueryData(["quota"], res.quota);
       void qc.invalidateQueries({ queryKey: ["projects"] });
     },
     onError: (err) => {
-      setPending(null);
       if (err instanceof ApiError && err.status === 429) {
-        setQuotaOpen(true);
+        const detail =
+          err.body && typeof err.body === "object"
+            ? String((err.body as { detail?: unknown }).detail ?? "")
+            : "";
+        setQuotaNotice(detail || "We have reached the studio's build budget for today.");
         return;
       }
       const detail =
@@ -145,6 +75,14 @@ export default function Home() {
           ? String((err.body as { detail?: unknown }).detail ?? "Something went wrong")
           : "Something went wrong";
       toast.error(detail);
+    },
+  });
+
+  const stop = useMutation({
+    mutationFn: (id: string) => apiPost<Project>(`/projects/${id}/stop`),
+    onSuccess: (project) => {
+      qc.setQueryData(["project", project.id], project);
+      toast.success("Build stopped");
     },
   });
 
@@ -163,53 +101,73 @@ export default function Home() {
   const messages: Message[] = project?.messages ?? [];
   const generating = Boolean(project?.generating);
   const busy = chat.isPending || generating;
+  const lastMessage = messages[messages.length - 1];
+  const openQuestions =
+    !generating && lastMessage?.role === "assistant" && lastMessage.kind === "questions"
+      ? lastMessage
+      : null;
 
-  // Announce the delivery once, when the background build lands.
-  const lastDelivered = useRef<string | null>(null);
+  const delivered = useRef<string | null>(null);
   useEffect(() => {
-    const last = messages[messages.length - 1];
-    if (!generating && last?.kind === "site" && lastDelivered.current !== last.id) {
-      lastDelivered.current = last.id;
+    if (!generating && lastMessage?.kind === "site" && delivered.current !== lastMessage.id) {
+      delivered.current = lastMessage.id;
       toast.success("Your site is ready");
       void qc.invalidateQueries({ queryKey: ["projects"] });
     }
-  }, [generating, messages, qc]);
+  }, [generating, lastMessage, qc]);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
-  }, [messages.length, pending, busy]);
+  }, [messages.length, busy, project?.progress_step, openQuestions]);
 
   const send = (text: string, attachments: Attachment[]) => {
     if (outOfQuota) {
-      setQuotaOpen(true);
+      setQuotaNotice(
+        "We have reached the studio's build budget for today. Your projects stay saved in the sidebar, so you can keep reviewing every preview and share link. Come back tomorrow, or contact LevelUp Studio to turn one of them into your real website right away.",
+      );
       return;
     }
-    setPending(text || "(attachment)");
-    chat.mutate({ text, attachments });
+    const brief = picked.length
+      ? `Project type: ${picked.map((p) => p.label).join(", ")}.${text ? `\n${text}` : ""}`
+      : text;
+    setQuotaNotice(null);
+    chat.mutate({ text: brief, attachments });
   };
+
+  const toggleService = (service: Service) => {
+    setPicked((prev) =>
+      prev.some((p) => p.id === service.id)
+        ? prev.filter((p) => p.id !== service.id)
+        : [...prev, service],
+    );
+    textareaRef.current?.focus();
+  };
+
+  const chips: Chip[] = picked.map((p) => ({ id: p.id, label: p.label }));
 
   const startNew = () => {
     setActiveId(null);
-    setPending(null);
+    setPicked([]);
+    setQuotaNotice(null);
     setSidebarOpen(false);
   };
 
-  const lastQuestionId = [...messages].reverse().find((m) => m.kind === "questions")?.id ?? null;
-
-  const sidebar = (onSelectExtra?: () => void) => (
+  const sidebar = (afterSelect?: () => void) => (
     <Sidebar
       projects={projectsQuery.data ?? []}
       loading={projectsQuery.isLoading}
       activeId={activeId}
       onSelect={(id) => {
         setActiveId(id);
-        onSelectExtra?.();
+        afterSelect?.();
       }}
       onDelete={(id) => remove.mutate(id)}
       onNew={startNew}
       onClose={() => setSidebarOpen(false)}
     />
   );
+
+  const step = project?.progress_step ?? 0;
 
   return (
     <div className="flex h-dvh w-full overflow-hidden bg-[#0A0A0F] text-slate-100">
@@ -225,7 +183,7 @@ export default function Home() {
             onClick={() => setSidebarOpen(false)}
             aria-label="Close sidebar"
           />
-          <div className="absolute inset-y-0 left-0 w-[290px] max-w-[85vw] shadow-2xl">
+          <div className="absolute inset-y-0 left-0 w-[290px] max-w-[86vw] shadow-2xl">
             {sidebar(() => setSidebarOpen(false))}
           </div>
         </div>
@@ -233,10 +191,10 @@ export default function Home() {
 
       <main className="flex min-w-0 flex-1 flex-col">
         <header
-          className="flex items-center justify-between border-b border-white/6 px-4 py-3 lg:px-6"
+          className="flex items-center justify-between gap-3 border-b border-white/6 px-3 py-3 sm:px-5"
           data-testid="app-header"
         >
-          <div className="flex min-w-0 items-center gap-3">
+          <div className="flex min-w-0 items-center gap-2">
             <button
               type="button"
               onClick={() => setSidebarOpen(true)}
@@ -259,7 +217,7 @@ export default function Home() {
           <button
             type="button"
             onClick={startNew}
-            className="inline-flex items-center gap-1.5 rounded-full border border-white/10 px-3.5 py-1.5 text-[13px] text-slate-300 transition-colors duration-200 hover:border-violet-400/40 hover:text-white"
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-white/10 px-3 py-1.5 text-[13px] text-slate-300 transition-colors duration-200 hover:border-violet-400/40 hover:text-white"
             data-testid="header-new-project-button"
           >
             <Plus className="size-3.5" /> New
@@ -268,50 +226,59 @@ export default function Home() {
 
         {!activeId ? (
           <div
-            className="relative flex flex-1 flex-col items-center justify-center overflow-y-auto scroll-slim px-5 py-10"
+            className="no-scrollbar relative flex flex-1 flex-col justify-center overflow-y-auto px-4 py-8 sm:px-6"
             data-testid="hero-section"
           >
             <div
               aria-hidden="true"
-              className="pointer-events-none absolute inset-x-0 top-0 h-[420px]"
+              className="pointer-events-none absolute inset-x-0 top-0 h-[380px]"
               style={{
                 background:
                   "radial-gradient(ellipse 60% 100% at 50% 0%, rgba(124,58,237,0.16), transparent 70%)",
               }}
             />
-            <div className="relative w-full max-w-[720px] animate-rise-in">
+            <div className="relative mx-auto w-full max-w-[720px]">
               <h1
-                className="text-center font-heading text-[30px] font-semibold leading-[1.15] tracking-tight text-white sm:text-[44px]"
+                className="text-center font-heading text-[28px] font-semibold leading-[1.15] tracking-tight text-white sm:text-[44px]"
                 data-testid="hero-title"
               >
                 What are we building today?
               </h1>
-              <p className="mx-auto mt-3 max-w-md text-center text-[15px] leading-relaxed text-slate-400">
-                Tell me about your business. I ask a few sharp questions, then deliver a complete,
-                secure, production-ready website — live in your browser.
+              <p className="mx-auto mt-3 max-w-md text-center text-[14px] leading-relaxed text-slate-400 sm:text-[15px]">
+                Tell me about your business. I ask a few questions, then deliver a complete, secure
+                website you can preview and share.
               </p>
 
-              <div className="mt-8">
-                <Composer onSend={send} busy={busy} disabled={outOfQuota} hero />
+              {quotaNotice && (
+                <div
+                  className="mt-6 rounded-2xl border border-white/10 bg-[#12121c] p-4"
+                  data-testid="quota-notice"
+                >
+                  <Markdown text={quotaNotice} />
+                </div>
+              )}
+
+              <div className="mt-7">
+                <Composer
+                  onSend={send}
+                  busy={busy}
+                  disabled={false}
+                  hero
+                  chips={chips}
+                  onRemoveChip={(id) => setPicked((p) => p.filter((s) => s.id !== id))}
+                  focusRef={textareaRef}
+                />
               </div>
 
-              <div
-                className="mt-6 flex flex-wrap justify-center gap-2"
-                data-testid="service-catalogue"
-              >
-                {SERVICES.map(({ id, label, Icon, prompt }) => (
-                  <button
-                    key={id}
-                    type="button"
-                    onClick={() => send(prompt, [])}
-                    disabled={busy || outOfQuota}
-                    className="group inline-flex items-center gap-2 rounded-xl border border-white/8 bg-white/[0.02] px-3 py-2 text-[13px] text-slate-400 transition-[border-color,color,transform] duration-200 hover:-translate-y-0.5 hover:border-violet-400/40 hover:text-white disabled:opacity-40"
-                    data-testid={`service-${id}`}
-                  >
-                    <Icon className="size-3.5 text-violet-400/80 transition-colors duration-200 group-hover:text-violet-300" />
-                    {label}
-                  </button>
-                ))}
+              <div className="mt-5">
+                <ServiceRail
+                  selected={picked.map((p) => p.id)}
+                  onToggle={toggleService}
+                  disabled={busy}
+                />
+                <p className="mt-3 text-center text-[11px] text-slate-600">
+                  Pick what fits, then add your own details before sending.
+                </p>
               </div>
             </div>
           </div>
@@ -319,12 +286,12 @@ export default function Home() {
           <>
             <div
               ref={scrollRef}
-              className="mx-auto w-full max-w-3xl flex-1 overflow-y-auto scroll-slim px-5 py-8"
+              className="no-scrollbar mx-auto w-full max-w-3xl flex-1 overflow-y-auto px-4 py-6 sm:px-5 sm:py-8"
               data-testid="chat-stream"
             >
               {projectQuery.isLoading && (
                 <div className="flex items-center gap-2 text-sm text-slate-500">
-                  <Loader2 className="size-4 animate-spin" /> Loading project…
+                  <Loader2 className="size-4 animate-spin" /> Loading project
                 </div>
               )}
 
@@ -335,7 +302,7 @@ export default function Home() {
                     className="mb-7 flex justify-end"
                     data-testid={`user-message-${m.id}`}
                   >
-                    <div className="max-w-[80%] animate-rise-in whitespace-pre-wrap rounded-2xl rounded-br-md bg-white/[0.06] px-4 py-2.5 text-[15px] leading-relaxed text-slate-100">
+                    <div className="max-w-[85%] animate-rise-in whitespace-pre-wrap rounded-2xl rounded-br-md bg-white/[0.06] px-4 py-2.5 text-[15px] leading-relaxed text-slate-100">
                       {m.text}
                       {m.attachments.length > 0 && (
                         <span className="mt-1 block text-[11px] text-slate-400">
@@ -346,89 +313,82 @@ export default function Home() {
                   </div>
                 ) : (
                   <div key={m.id} className="mb-8" data-testid={`assistant-message-${m.id}`}>
-                    {m.kind === "questions" ? (
-                      <QuestionCard
-                        message={m}
-                        locked={m.id !== lastQuestionId}
-                        busy={busy}
-                        onSubmit={(answer) => send(answer, [])}
+                    <Markdown text={m.text} />
+                    {m.kind === "site" && m.html && (
+                      <SiteDeliveryCard
+                        html={m.html}
+                        name={m.site_name ?? project?.title ?? "site"}
+                        style={m.site_style}
+                        projectId={project!.id}
+                        messageId={m.id}
+                        onRequestChange={() => textareaRef.current?.focus()}
                       />
-                    ) : m.kind === "site" && m.html ? (
-                      <>
-                        <Markdown text={m.text} />
-                        <SiteDeliveryCard
-                          html={m.html}
-                          name={m.site_name ?? project?.title ?? "site"}
-                          style={m.site_style}
-                          messageId={m.id}
-                          onRequestChange={() =>
-                            composerRef.current?.querySelector("textarea")?.focus()
-                          }
-                        />
-                      </>
-                    ) : (
-                      <Markdown text={m.text} />
+                    )}
+                    {m.kind === "questions" && m.id !== openQuestions?.id && (
+                      <p className="mt-2 text-[12px] text-slate-500">Answers sent.</p>
                     )}
                   </div>
                 ),
               )}
 
-              {pending && (
-                <div className="mb-7 flex justify-end" data-testid="pending-user-message">
-                  <div className="max-w-[80%] whitespace-pre-wrap rounded-2xl rounded-br-md bg-white/[0.04] px-4 py-2.5 text-[15px] leading-relaxed text-slate-400">
-                    {pending}
+              {busy && (
+                <div className="mb-8" aria-live="polite" data-testid="build-progress">
+                  <div className="space-y-2">
+                    {STAGES.slice(0, Math.min(step + 1, STAGES.length)).map((label, i) => {
+                      const done = i < step;
+                      return (
+                        <div key={label} className="flex items-center gap-2.5 text-[13px]">
+                          {done ? (
+                            <Check className="size-3.5 shrink-0 text-emerald-400" />
+                          ) : (
+                            <span className="size-2 shrink-0 animate-star-breathe rounded-full bg-violet-400" />
+                          )}
+                          <span className={done ? "text-slate-500" : "text-slate-200"}>{label}</span>
+                        </div>
+                      );
+                    })}
                   </div>
+                  <p className="mt-3 text-[11px] text-slate-600">
+                    A full build takes about two minutes. You can stop it any time.
+                  </p>
                 </div>
               )}
-              {busy && (
+
+              {quotaNotice && (
                 <div
-                  aria-live="polite"
-                  className="mb-8 flex items-center gap-2.5 text-[14px]"
-                  data-testid="thinking-indicator"
+                  className="mb-8 rounded-2xl border border-white/10 bg-[#12121c] p-4"
+                  data-testid="quota-notice"
                 >
-                  <span className="size-2 animate-star-breathe rounded-full bg-violet-400" />
-                  <span className="animate-shimmer bg-gradient-to-r from-slate-500 via-white to-slate-500 bg-clip-text text-transparent">
-                    Designing your site…
-                  </span>
+                  <Markdown text={quotaNotice} />
                 </div>
               )}
             </div>
 
-            <div
-              ref={composerRef}
-              className="mx-auto w-full max-w-3xl px-5 pb-5"
-              data-testid="chat-composer-wrapper"
-            >
-              <Composer onSend={send} busy={busy} disabled={outOfQuota} hero={false} />
+            <div className="mx-auto w-full max-w-3xl px-4 pb-4 sm:px-5">
+              {openQuestions && (
+                <div className="mb-2">
+                  <QuestionPanel
+                    message={openQuestions}
+                    busy={busy}
+                    onSubmit={(answer) => send(answer, [])}
+                  />
+                </div>
+              )}
+              <Composer
+                onSend={send}
+                onStop={() => project && stop.mutate(project.id)}
+                busy={busy}
+                disabled={false}
+                hero={false}
+                focusRef={textareaRef}
+              />
               <p className="mt-2 text-center text-[11px] text-slate-600">
-                Previews are AI-generated drafts reviewed by LevelUp Studio before anything ships.
+                Previews are AI drafts reviewed by LevelUp Studio before anything ships.
               </p>
             </div>
           </>
         )}
       </main>
-
-      <Dialog open={quotaOpen} onOpenChange={setQuotaOpen}>
-        <DialogContent className="border-white/10 bg-[#101019]" data-testid="quota-modal">
-          <DialogHeader>
-            <DialogTitle className="font-heading text-white">
-              That's enough building for today
-            </DialogTitle>
-            <DialogDescription className="text-slate-400">
-              The studio takes a short break to keep every build sharp. Your projects stay saved —
-              open any of them from the sidebar to review its live preview.
-            </DialogDescription>
-          </DialogHeader>
-          <button
-            type="button"
-            onClick={() => setQuotaOpen(false)}
-            className="mt-2 w-full rounded-full bg-gradient-to-r from-violet-500 to-fuchsia-600 px-4 py-2.5 text-sm font-medium text-white transition-transform duration-200 active:scale-[0.98]"
-            data-testid="quota-modal-close"
-          >
-            Got it
-          </button>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

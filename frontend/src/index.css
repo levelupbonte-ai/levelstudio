@@ -164,6 +164,13 @@
     }
 }
 
+.no-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
+.no-scrollbar::-webkit-scrollbar { width: 0; height: 0; display: none; }
+
+/* No visible scrollbars anywhere in the app shell. */
+* { scrollbar-width: none; }
+*::-webkit-scrollbar { width: 0; height: 0; display: none; }
+
 .glass-panel {
     background-color: color-mix(in srgb, #13121F 80%, transparent);
     backdrop-filter: blur(24px);
@@ -171,9 +178,6 @@
     box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.45);
 }
 
-.scroll-slim::-webkit-scrollbar { width: 8px; height: 8px; }
-.scroll-slim::-webkit-scrollbar-thumb { background: #2b2748; border-radius: 99px; }
-.scroll-slim::-webkit-scrollbar-track { background: transparent; }
 
 @layer base {
   * {
