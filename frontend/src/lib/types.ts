@@ -29,6 +29,7 @@ export interface Message {
   attachments: Attachment[];
   site_name: string | null;
   site_style: string | null;
+  suggestions: string[];
   html: string | null;
   created_at: string;
 }
@@ -41,6 +42,8 @@ export interface Project {
   generating: boolean;
   progress: string | null;
   progress_step: number;
+  progress_pct: number;
+  template_id: string | null;
   share_token: string | null;
   share_expires_at: string | null;
   messages: Message[];
@@ -73,4 +76,12 @@ export interface ShareLink {
   url: string;
   path: string;
   expires_at: string;
+}
+
+export interface Template {
+  id: string;
+  name: string;
+  tagline: string;
+  best_for: string;
+  accent: string;
 }

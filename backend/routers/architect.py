@@ -13,6 +13,7 @@ from fastapi.responses import HTMLResponse
 from lib.architect_brain import run_architect
 from lib.db import db
 from lib.html_post import harden_images
+from lib.templates import TEMPLATES
 from models.architect import (
     ChatRequest,
     ChatResponse,
@@ -23,6 +24,7 @@ from models.architect import (
     Choice,
     Quota,
     ShareLink,
+    Template,
 )
 
 logger = logging.getLogger(__name__)
@@ -44,25 +46,73 @@ STAGES = [
     "Writing the page sections",
     "Building the interactive screens",
     "Tuning the mobile layout",
-    "Final polish",
+    "Checking every section is complete",
 ]
 
+# Reassuring notes shown under the progress list, one per stage.
+STAGE_NOTES = [
+    "Taking in every answer you gave me.",
+    "Picking a palette and type pairing that fits your trade.",
+    "Structuring the pages the way visitors read them.",
+    "Writing real copy, no filler text.",
+    "Wiring the booking, menu and account screens.",
+    "Making sure it feels right in one hand.",
+    "A last pass so nothing ships half finished.",
+]
 
-async def _set_progress(project_id: str, step: int) -> None:
+EXPECTED_SECONDS = 150
+
+
+async def _set_progress(project_id: str, step: int, pct: int) -> None:
     step = max(0, min(step, len(STAGES) - 1))
     await db.projects.update_one(
-        {"id": project_id}, {"$set": {"progress": STAGES[step], "progress_step": step}}
+        {"id": project_id},
+        {"$set": {"progress": STAGES[step], "progress_step": step, "progress_pct": min(pct, 99)}},
     )
 
 
 async def _progress_ticker(project_id: str) -> None:
     """Walks the build stages while the model works, so the wait shows real movement."""
+    elapsed = 0.0
     try:
-        for step in range(len(STAGES)):
-            await _set_progress(project_id, step)
-            await asyncio.sleep(16)
+        while True:
+            pct = int(min(99, (elapsed / EXPECTED_SECONDS) * 100))
+            step = min(int(elapsed // (EXPECTED_SECONDS / len(STAGES))), len(STAGES) - 1)
+            await _set_progress(project_id, step, pct)
+            await asyncio.sleep(2)
+            elapsed += 2
     except asyncio.CancelledError:
         raise
+
+
+@router.get("/templates", response_model=List[Template])
+async def list_templates() -> List[Template]:
+    docs = await db.templates.find({}, {"_id": 0, "html": 0}).to_list(50)
+    if not docs:  # first boot: persist the hand-built starters, code included
+        await db.templates.insert_many([dict(t) for t in TEMPLATES])
+        docs = [{k: v for k, v in t.items() if k != "html"} for t in TEMPLATES]
+    order = {t["id"]: i for i, t in enumerate(TEMPLATES)}
+    docs.sort(key=lambda d: order.get(d["id"], 99))
+    return [Template(**d) for d in docs]
+
+
+@router.get("/templates/{template_id}/html", response_class=HTMLResponse)
+async def template_html(template_id: str) -> HTMLResponse:
+    doc = await db.templates.find_one({"id": template_id}, {"_id": 0})
+    if not doc:
+        doc = next((t for t in TEMPLATES if t["id"] == template_id), None)
+    if not doc:
+        raise HTTPException(status_code=404, detail="Template not found")
+    return HTMLResponse(content=doc["html"])
+
+
+async def _get_template(template_id: str | None) -> Dict[str, Any] | None:
+    if not template_id:
+        return None
+    doc = await db.templates.find_one({"id": template_id}, {"_id": 0})
+    if doc:
+        return doc
+    return next((dict(t) for t in TEMPLATES if t["id"] == template_id), None)
 
 
 def _today() -> str:
@@ -228,22 +278,47 @@ async def shared_site(token: str) -> HTMLResponse:
     return HTMLResponse(content=doc["html"], headers={"X-Robots-Tag": "noindex, nofollow"})
 
 
-async def _generate(project_id: str, transcript: List[Dict[str, Any]], images: List[Dict[str, str]]) -> None:
+def _looks_complete(html: str) -> bool:
+    lowered = html.lower()
+    return len(html) > 6000 and "</html>" in lowered and lowered.count("<section") >= 4
+
+
+async def _generate(
+    project_id: str,
+    transcript: List[Dict[str, Any]],
+    images: List[Dict[str, str]],
+    template_id: str | None = None,
+) -> None:
     """Runs the architect off the request cycle — a full build takes longer than any HTTP timeout."""
     try:
         project = await _load(project_id)
     except HTTPException:
         return
 
+    base_template = await _get_template(template_id or project.template_id)
     ticker = asyncio.create_task(_progress_ticker(project_id))
     reply = Message(role="assistant", kind="error", text="")
     result: Dict[str, Any] | None = None
     try:
-        result = await run_architect(project_id, transcript, project.html, images)
+        result = await run_architect(project_id, transcript, project.html, images, base_template)
+        # One retry when the model truncates the document: an incomplete site is worse than a wait.
+        if result.get("kind") == "site" and not _looks_complete(str(result.get("html") or "")):
+            logger.warning("incomplete document for %s, retrying once", project_id)
+            retry_transcript = transcript + [
+                {
+                    "role": "user",
+                    "text": "Your last document was incomplete. Rebuild it in full, every section "
+                    "written out, ending with </body></html>.",
+                }
+            ]
+            result = await run_architect(
+                project_id, retry_transcript, project.html, images, base_template
+            )
     except asyncio.CancelledError:
         ticker.cancel()
         await db.projects.update_one(
-            {"id": project_id}, {"$set": {"generating": False, "progress": None, "progress_step": 0}}
+            {"id": project_id},
+            {"$set": {"generating": False, "progress": None, "progress_step": 0, "progress_pct": 0}},
         )
         raise
     except Exception as exc:  # noqa: BLE001
@@ -283,6 +358,7 @@ async def _generate(project_id: str, transcript: List[Dict[str, Any]], images: L
             reply.html = harden_images(str(result["html"]))
             reply.site_name = str(result.get("title") or project.title)
             reply.site_style = str(result.get("style") or "")
+            reply.suggestions = [str(s)[:60] for s in (result.get("suggestions") or [])[:3]]
             if not reply.text:
                 reply.text = "Your site is ready."
             project.html = reply.html
@@ -314,6 +390,8 @@ async def chat(payload: ChatRequest) -> ChatResponse:
     project = await _load(payload.project_id) if payload.project_id else Project()
     if project.generating:
         raise HTTPException(status_code=409, detail="A build is already running for this project")
+    if payload.template_id:
+        project.template_id = payload.template_id
 
     user_text = payload.text.strip()
     context_bits: List[str] = []
@@ -347,11 +425,12 @@ async def chat(payload: ChatRequest) -> ChatResponse:
     project.generating = True
     project.progress = STAGES[0]
     project.progress_step = 0
+    project.progress_pct = 1
     project.updated_at = datetime.now(timezone.utc)
     await db.projects.replace_one({"id": project.id}, project.model_dump(), upsert=True)
 
     quota = await _quota(consume=True)
-    task = asyncio.create_task(_generate(project.id, transcript, images))
+    task = asyncio.create_task(_generate(project.id, transcript, images, project.template_id))
     _JOBS.add(task)
     _RUNNING[project.id] = task
     task.add_done_callback(_JOBS.discard)

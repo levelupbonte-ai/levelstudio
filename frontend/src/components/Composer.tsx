@@ -9,11 +9,11 @@ const MAX_BYTES = 5 * 1024 * 1024;
 
 // Rotating hints. **bold** is rendered inline.
 const PHRASES = [
-  "Describe your project and I design the **whole site**.",
-  "A **barbershop** site with 24/7 chair booking.",
-  "An **online store** for merch with a secure checkout.",
-  "A **portfolio** that shows my work like a gallery.",
-  "A **restaurant** site with menu and table reservation.",
+  "Describe your **project**",
+  "A **barbershop** with online booking",
+  "An **online store** for my merch",
+  "A **portfolio** for my work",
+  "A **restaurant** with a live menu",
 ];
 
 function boldify(text: string) {
@@ -131,7 +131,7 @@ export default function Composer({
           void addFiles(e.dataTransfer.files);
         }}
         className={cn(
-          "rounded-[22px] border border-white/8 bg-[#141420]/90 px-3 pb-2 pt-1 backdrop-blur-xl transition-[border-color,box-shadow] duration-300",
+          "rounded-[22px] border border-white/8 bg-gradient-to-b from-[#181726]/95 to-[#121120]/95 px-3 pb-2 pt-1 backdrop-blur-xl transition-[border-color,box-shadow] duration-300",
           focused &&
             "border-violet-500/45 shadow-[0_0_0_1px_rgba(139,92,246,0.22),0_18px_50px_-24px_rgba(139,92,246,0.5)]",
           dragging && "border-violet-400",
@@ -163,7 +163,13 @@ export default function Composer({
                 className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.04] px-2.5 py-1 text-xs text-slate-200"
                 data-testid={`attachment-chip-${i}`}
               >
-                {f.kind === "image" ? (
+                {f.kind === "image" && f.data ? (
+                  <img
+                    src={`data:${f.mime};base64,${f.data}`}
+                    alt=""
+                    className="size-5 rounded object-cover"
+                  />
+                ) : f.kind === "image" ? (
                   <ImageIcon className="size-3 text-violet-300" />
                 ) : (
                   <FileText className="size-3 text-violet-300" />

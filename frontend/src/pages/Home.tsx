@@ -1,34 +1,39 @@
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, Loader2, Menu, Plus } from "lucide-react";
+import { Loader2, Menu, PanelRightClose, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { Toaster } from "@/components/ui/sonner";
+import BuildProgress from "@/components/BuildProgress";
 import Composer, { type Chip } from "@/components/Composer";
 import Markdown from "@/components/Markdown";
-import QuestionPanel from "@/components/QuestionPanel";
+import QuestionWizard from "@/components/QuestionWizard";
 import ServiceRail, { type Service } from "@/components/ServiceRail";
-import SiteDeliveryCard from "@/components/SiteDeliveryCard";
+import SiteDeliveryCard, { PreviewFrame } from "@/components/SiteDeliveryCard";
 import Sidebar from "@/components/Sidebar";
+import TemplateGallery from "@/components/TemplateGallery";
 import { ApiError, apiDelete, apiGet, apiPost } from "@/lib/api";
 import type { Attachment, ChatResponse, Message, Project, ProjectSummary, Quota } from "@/lib/types";
 
-// Mirrors STAGES in backend/routers/architect.py
-const STAGES = [
-  "Reading your brief",
-  "Choosing the design direction",
-  "Laying out the navigation and hero",
-  "Writing the page sections",
-  "Building the interactive screens",
-  "Tuning the mobile layout",
-  "Final polish",
-];
+/** The side canvas is a desktop affordance: on a phone the preview opens full screen instead. */
+function useIsWide() {
+  const [wide, setWide] = useState(() => window.innerWidth >= 1280);
+  useEffect(() => {
+    const onResize = () => setWide(window.innerWidth >= 1280);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+  return wide;
+}
 
 export default function Home() {
+  const isWide = useIsWide();
   const qc = useQueryClient();
   const [activeId, setActiveId] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [picked, setPicked] = useState<Service[]>([]);
+  const [template, setTemplate] = useState<string | null>(null);
   const [quotaNotice, setQuotaNotice] = useState<string | null>(null);
+  const [canvasOpen, setCanvasOpen] = useState(true);
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -43,8 +48,7 @@ export default function Home() {
     queryKey: ["project", activeId],
     queryFn: () => apiGet<Project>(`/projects/${activeId}`),
     enabled: Boolean(activeId),
-    // The build runs server side and outlives any single request, so poll while it works.
-    refetchInterval: (query) => (query.state.data?.generating ? 2500 : false),
+    refetchInterval: (query) => (query.state.data?.generating ? 2000 : false),
   });
 
   const chat = useMutation({
@@ -52,11 +56,13 @@ export default function Home() {
       apiPost<ChatResponse>("/chat", {
         project_id: activeId,
         text: vars.text,
+        template_id: template,
         attachments: vars.attachments,
       }),
     onSuccess: (res) => {
       setPicked([]);
       setActiveId(res.project.id);
+      setCanvasOpen(true);
       qc.setQueryData(["project", res.project.id], res.project);
       qc.setQueryData(["quota"], res.quota);
       void qc.invalidateQueries({ queryKey: ["projects"] });
@@ -106,6 +112,8 @@ export default function Home() {
     !generating && lastMessage?.role === "assistant" && lastMessage.kind === "questions"
       ? lastMessage
       : null;
+  const lastSite = [...messages].reverse().find((m) => m.kind === "site" && m.html) ?? null;
+  const showCanvas = isWide && canvasOpen && (generating || Boolean(lastSite));
 
   const delivered = useRef<string | null>(null);
   useEffect(() => {
@@ -134,6 +142,14 @@ export default function Home() {
     chat.mutate({ text: brief, attachments });
   };
 
+  const requestChange = (preset?: string) => {
+    if (preset) {
+      send(preset, []);
+      return;
+    }
+    textareaRef.current?.focus();
+  };
+
   const toggleService = (service: Service) => {
     setPicked((prev) =>
       prev.some((p) => p.id === service.id)
@@ -148,6 +164,7 @@ export default function Home() {
   const startNew = () => {
     setActiveId(null);
     setPicked([]);
+    setTemplate(null);
     setQuotaNotice(null);
     setSidebarOpen(false);
   };
@@ -159,6 +176,7 @@ export default function Home() {
       activeId={activeId}
       onSelect={(id) => {
         setActiveId(id);
+        setCanvasOpen(true);
         afterSelect?.();
       }}
       onDelete={(id) => remove.mutate(id)}
@@ -167,13 +185,11 @@ export default function Home() {
     />
   );
 
-  const step = project?.progress_step ?? 0;
-
   return (
     <div className="flex h-dvh w-full overflow-hidden bg-[#0A0A0F] text-slate-100">
       <Toaster richColors />
 
-      <div className="hidden w-[268px] shrink-0 lg:block">{sidebar()}</div>
+      <div className="hidden w-[262px] shrink-0 lg:block">{sidebar()}</div>
 
       {sidebarOpen && (
         <div className="fixed inset-0 z-50 lg:hidden" data-testid="mobile-sidebar">
@@ -183,15 +199,15 @@ export default function Home() {
             onClick={() => setSidebarOpen(false)}
             aria-label="Close sidebar"
           />
-          <div className="absolute inset-y-0 left-0 w-[290px] max-w-[86vw] shadow-2xl">
+          <div className="absolute inset-y-0 left-0 w-[288px] max-w-[86vw] shadow-2xl">
             {sidebar(() => setSidebarOpen(false))}
           </div>
         </div>
       )}
 
-      <main className="flex min-w-0 flex-1 flex-col">
+      <main className="flex min-h-0 min-w-0 flex-1 flex-col">
         <header
-          className="flex items-center justify-between gap-3 border-b border-white/6 px-3 py-3 sm:px-5"
+          className="flex shrink-0 items-center justify-between gap-3 border-b border-white/6 px-3 py-3 sm:px-5"
           data-testid="app-header"
         >
           <div className="flex min-w-0 items-center gap-2">
@@ -214,24 +230,37 @@ export default function Home() {
               {project ? project.title : "Senior web architect"}
             </p>
           </div>
-          <button
-            type="button"
-            onClick={startNew}
-            className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-white/10 px-3 py-1.5 text-[13px] text-slate-300 transition-colors duration-200 hover:border-violet-400/40 hover:text-white"
-            data-testid="header-new-project-button"
-          >
-            <Plus className="size-3.5" /> New
-          </button>
+          <div className="flex shrink-0 items-center gap-2">
+            {(generating || lastSite) && (
+              <button
+                type="button"
+                onClick={() => setCanvasOpen((v) => !v)}
+                className="hidden items-center gap-1.5 rounded-full border border-white/10 px-3 py-1.5 text-[13px] text-slate-300 transition-colors duration-200 hover:border-violet-400/40 hover:text-white xl:inline-flex"
+                data-testid="toggle-canvas-button"
+              >
+                <PanelRightClose className="size-3.5" />
+                {showCanvas ? "Hide canvas" : "Show canvas"}
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={startNew}
+              className="inline-flex items-center gap-1.5 rounded-full border border-white/10 px-3 py-1.5 text-[13px] text-slate-300 transition-colors duration-200 hover:border-violet-400/40 hover:text-white"
+              data-testid="header-new-project-button"
+            >
+              <Plus className="size-3.5" /> New
+            </button>
+          </div>
         </header>
 
         {!activeId ? (
           <div
-            className="no-scrollbar relative flex flex-1 flex-col justify-center overflow-y-auto px-4 py-8 sm:px-6"
+            className="no-scrollbar relative flex min-h-0 flex-1 flex-col justify-center overflow-y-auto px-4 py-8 sm:px-6"
             data-testid="hero-section"
           >
             <div
               aria-hidden="true"
-              className="pointer-events-none absolute inset-x-0 top-0 h-[380px]"
+              className="pointer-events-none absolute inset-x-0 top-0 h-[360px]"
               style={{
                 background:
                   "radial-gradient(ellipse 60% 100% at 50% 0%, rgba(124,58,237,0.16), transparent 70%)",
@@ -239,14 +268,14 @@ export default function Home() {
             />
             <div className="relative mx-auto w-full max-w-[720px]">
               <h1
-                className="text-center font-heading text-[28px] font-semibold leading-[1.15] tracking-tight text-white sm:text-[44px]"
+                className="text-center font-heading text-[26px] font-semibold leading-[1.15] tracking-tight text-white sm:text-[42px]"
                 data-testid="hero-title"
               >
                 What are we building today?
               </h1>
               <p className="mx-auto mt-3 max-w-md text-center text-[14px] leading-relaxed text-slate-400 sm:text-[15px]">
-                Tell me about your business. I ask a few questions, then deliver a complete, secure
-                website you can preview and share.
+                Tell me about your business. I ask a few questions, then deliver a complete website
+                you can preview and share.
               </p>
 
               {quotaNotice && (
@@ -276,117 +305,131 @@ export default function Home() {
                   onToggle={toggleService}
                   disabled={busy}
                 />
-                <p className="mt-3 text-center text-[11px] text-slate-600">
-                  Pick what fits, then add your own details before sending.
-                </p>
+              </div>
+
+              <div className="mt-8">
+                <TemplateGallery selected={template} onSelect={setTemplate} disabled={busy} />
               </div>
             </div>
           </div>
         ) : (
-          <>
-            <div
-              ref={scrollRef}
-              className="no-scrollbar mx-auto w-full max-w-3xl flex-1 overflow-y-auto px-4 py-6 sm:px-5 sm:py-8"
-              data-testid="chat-stream"
-            >
-              {projectQuery.isLoading && (
-                <div className="flex items-center gap-2 text-sm text-slate-500">
-                  <Loader2 className="size-4 animate-spin" /> Loading project
-                </div>
-              )}
+          <div className="flex min-h-0 flex-1">
+            {/* Conversation column */}
+            <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+              <div
+                ref={scrollRef}
+                className="no-scrollbar mx-auto w-full max-w-3xl flex-1 overflow-y-auto px-4 py-6 sm:px-5"
+                data-testid="chat-stream"
+              >
+                {projectQuery.isLoading && (
+                  <div className="flex items-center gap-2 text-sm text-slate-500">
+                    <Loader2 className="size-4 animate-spin" /> Loading project
+                  </div>
+                )}
 
-              {messages.map((m) =>
-                m.role === "user" ? (
-                  <div
-                    key={m.id}
-                    className="mb-7 flex justify-end"
-                    data-testid={`user-message-${m.id}`}
-                  >
-                    <div className="max-w-[85%] animate-rise-in whitespace-pre-wrap rounded-2xl rounded-br-md bg-white/[0.06] px-4 py-2.5 text-[15px] leading-relaxed text-slate-100">
-                      {m.text}
-                      {m.attachments.length > 0 && (
-                        <span className="mt-1 block text-[11px] text-slate-400">
-                          {m.attachments.map((a) => a.name).join(", ")}
-                        </span>
+                {messages.map((m) =>
+                  m.role === "user" ? (
+                    <div
+                      key={m.id}
+                      className="mb-7 flex justify-end"
+                      data-testid={`user-message-${m.id}`}
+                    >
+                      {/* User answers stay regular weight, unlike the architect's bold questions. */}
+                      <div className="max-w-[85%] animate-rise-in whitespace-pre-wrap rounded-2xl rounded-br-md bg-white/[0.05] px-4 py-2.5 text-[14px] font-normal leading-relaxed text-slate-300">
+                        {m.text}
+                        {m.attachments.length > 0 && (
+                          <span className="mt-1 block text-[11px] text-slate-500">
+                            {m.attachments.map((a) => a.name).join(", ")}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    <div key={m.id} className="mb-8" data-testid={`assistant-message-${m.id}`}>
+                      <Markdown text={m.text} />
+                      {m.kind === "site" && m.html && (
+                        <SiteDeliveryCard
+                          html={m.html}
+                          name={m.site_name ?? project?.title ?? "site"}
+                          style={m.site_style}
+                          suggestions={m.suggestions ?? []}
+                          projectId={project!.id}
+                          messageId={m.id}
+                          onRequestChange={requestChange}
+                          showPreviewButton={!showCanvas || m.id !== lastSite?.id}
+                        />
+                      )}
+                      {m.kind === "questions" && m.id !== openQuestions?.id && (
+                        <p className="mt-2 text-[12px] text-slate-500">Answers sent.</p>
                       )}
                     </div>
-                  </div>
-                ) : (
-                  <div key={m.id} className="mb-8" data-testid={`assistant-message-${m.id}`}>
-                    <Markdown text={m.text} />
-                    {m.kind === "site" && m.html && (
-                      <SiteDeliveryCard
-                        html={m.html}
-                        name={m.site_name ?? project?.title ?? "site"}
-                        style={m.site_style}
-                        projectId={project!.id}
-                        messageId={m.id}
-                        onRequestChange={() => textareaRef.current?.focus()}
-                      />
-                    )}
-                    {m.kind === "questions" && m.id !== openQuestions?.id && (
-                      <p className="mt-2 text-[12px] text-slate-500">Answers sent.</p>
-                    )}
-                  </div>
-                ),
-              )}
+                  ),
+                )}
 
-              {busy && (
-                <div className="mb-8" aria-live="polite" data-testid="build-progress">
-                  <div className="space-y-2">
-                    {STAGES.slice(0, Math.min(step + 1, STAGES.length)).map((label, i) => {
-                      const done = i < step;
-                      return (
-                        <div key={label} className="flex items-center gap-2.5 text-[13px]">
-                          {done ? (
-                            <Check className="size-3.5 shrink-0 text-emerald-400" />
-                          ) : (
-                            <span className="size-2 shrink-0 animate-star-breathe rounded-full bg-violet-400" />
-                          )}
-                          <span className={done ? "text-slate-500" : "text-slate-200"}>{label}</span>
-                        </div>
-                      );
-                    })}
+                {busy && !showCanvas && (
+                  <div className="mb-8" aria-live="polite">
+                    <BuildProgress
+                      step={project?.progress_step ?? 0}
+                      pct={project?.progress_pct ?? 1}
+                      onStop={() => project && stop.mutate(project.id)}
+                      compact
+                    />
                   </div>
-                  <p className="mt-3 text-[11px] text-slate-600">
-                    A full build takes about two minutes. You can stop it any time.
-                  </p>
-                </div>
-              )}
+                )}
 
-              {quotaNotice && (
-                <div
-                  className="mb-8 rounded-2xl border border-white/10 bg-[#12121c] p-4"
-                  data-testid="quota-notice"
-                >
-                  <Markdown text={quotaNotice} />
-                </div>
-              )}
+                {quotaNotice && (
+                  <div
+                    className="mb-8 rounded-2xl border border-white/10 bg-[#12121c] p-4"
+                    data-testid="quota-notice"
+                  >
+                    <Markdown text={quotaNotice} />
+                  </div>
+                )}
+              </div>
+
+              <div className="mx-auto w-full max-w-3xl shrink-0 px-4 pb-4 sm:px-5">
+                {openQuestions && (
+                  <div className="mb-2">
+                    <QuestionWizard
+                      message={openQuestions}
+                      busy={busy}
+                      onSubmit={(answer) => send(answer, [])}
+                    />
+                  </div>
+                )}
+                <Composer
+                  onSend={send}
+                  onStop={() => project && stop.mutate(project.id)}
+                  busy={busy}
+                  disabled={false}
+                  hero={false}
+                  focusRef={textareaRef}
+                />
+              </div>
             </div>
 
-            <div className="mx-auto w-full max-w-3xl px-4 pb-4 sm:px-5">
-              {openQuestions && (
-                <div className="mb-2">
-                  <QuestionPanel
-                    message={openQuestions}
-                    busy={busy}
-                    onSubmit={(answer) => send(answer, [])}
+            {/* Canvas column: the site as it is being built, live */}
+            {showCanvas && (
+              <aside
+                className="hidden min-h-0 w-[48%] shrink-0 flex-col border-l border-white/6 p-3 xl:flex"
+                data-testid="site-canvas"
+              >
+                {generating || !lastSite?.html ? (
+                  <BuildProgress
+                    step={project?.progress_step ?? 0}
+                    pct={project?.progress_pct ?? 1}
+                    onStop={() => project && stop.mutate(project.id)}
                   />
-                </div>
-              )}
-              <Composer
-                onSend={send}
-                onStop={() => project && stop.mutate(project.id)}
-                busy={busy}
-                disabled={false}
-                hero={false}
-                focusRef={textareaRef}
-              />
-              <p className="mt-2 text-center text-[11px] text-slate-600">
-                Previews are AI drafts reviewed by LevelUp Studio before anything ships.
-              </p>
-            </div>
-          </>
+                ) : (
+                  <PreviewFrame
+                    html={lastSite.html}
+                    name={lastSite.site_name ?? project?.title ?? "site"}
+                    messageId={lastSite.id}
+                  />
+                )}
+              </aside>
+            )}
+          </div>
         )}
       </main>
     </div>

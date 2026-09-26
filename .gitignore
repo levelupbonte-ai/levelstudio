@@ -4,6 +4,9 @@
 .idea/
 .vscode/
 
+.env
+.env.*
+!.env.example
 # Dependencies
 node_modules/
 /node_modules
@@ -31,6 +34,9 @@ dist/
 dist
 
 # Environment files (comprehensive coverage)
+.env
+.env.*
+!.env.example
 
 *token.json*
 *credentials.json*
@@ -86,3 +92,7 @@ android-sdk/
 
 # overlay black-box crash/user-report dumps — session data, never history
 **/.emergent/recordings/
+
+# Generated preview cron state contains environment-specific identifiers and URLs
+.emergent/cron/applied.hash
+.emergent/cron/webhook-crons

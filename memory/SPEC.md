@@ -48,8 +48,10 @@ saves the user turn, sets `generating=true`, returns immediately and spawns an a
   rendered as an assistant note (`data-testid="quota-notice"`).
 - Service catalogue is a horizontal rail with arrows (`ServiceRail.tsx`), no icons. Picking a service
   **attaches a chip** to the composer instead of starting a build; the user then adds their own text.
-- Questions arrive as a **panel above the composer** (`QuestionPanel.tsx`): 4-5 questions, single or
-  multi select (`Question.multi`), plus a free-text "My own answer" per question.
+- Questions arrive as a **step-by-step wizard above the composer** (`QuestionWizard.tsx`): one
+  question per step with Back/Next, dots + n/5 counter, single or multi select (`Question.multi`),
+  and a free-text "My own answer" per step. The architect's question is bold, the options and the
+  user's echoed answers are regular weight so the two never read alike.
 - Composer: paperclip opens a popover to choose Image or File, stop button replaces send while a
   build runs, rotating hints render inline **bold**.
 - Delivery is a **file card**: thumbnail, `<slug>.html`, style, section count, size, then Live
@@ -57,8 +59,24 @@ saves the user turn, sets `generating=true`, returns immediately and spawns an a
   **No download button — by design.**
 - Share link: `POST /projects/{id}/share` mints a token valid 7 days, served by `GET /api/share/{token}`
   with `X-Robots-Tag: noindex` (410 once expired).
-- Build progress: backend walks `STAGES` (7 steps) writing `progress`/`progress_step`; the client
-  polls and ticks them off one by one. `POST /projects/{id}/stop` cancels the running task.
+- Build progress: backend ticker writes `progress`, `progress_step` and `progress_pct` every 2s
+  (`EXPECTED_SECONDS = 150`); `BuildProgress.tsx` shows the live percentage, simulation blocks,
+  reassuring `STAGE_NOTES` and a stop button. `POST /projects/{id}/stop` cancels the task.
+- Desktop (>=1280px) shows a **right-hand canvas** (`data-testid=site-canvas`): build progress while
+  it works, then the live `PreviewFrame` with browser chrome. Below that width the canvas is off and
+  the in-stream delivery card's Live preview opens full screen; the device switcher is hidden on
+  mobile since only the phone view is meaningful there.
+- Home offers three hand-built **starter designs** (`lib/templates.py`, stored in the `templates`
+  collection, live thumbnails via `GET /api/templates/{id}/html`). A pick is sent as
+  `ChatRequest.template_id`, saved on the project and handed to the architect as the base design.
+- After a delivery the architect explains the site section by section, asks what to adjust, and
+  returns three `suggestions` rendered as one-tap tweak chips (a refinement changes only that).
+- Every generated document is retried once if it comes back truncated (`_looks_complete`), and the
+  prompt bans invented SVG paths (labelled pills for social links) plus emoji.
+- A demo note ("This is an AI preview. Some photos are demo visuals…") sits under the canvas, the
+  delivery card and the progress panel.
+- Test fixture: `python /app/backend/seed.py` creates project `seed-questions-fixture` whose last
+  turn is an unanswered 5-question round (2 of them multi-select) — no AI cost.
 - Generated HTML is post-processed in `lib/html_post.py`: Tailwind CDN `<link>` rewritten to the
   required `<script>` (a `<link>` leaves the page completely unstyled), Unsplash URLs rewritten to
   seeded `picsum.photos`, and an `img` error handler injected that swaps a broken image for an

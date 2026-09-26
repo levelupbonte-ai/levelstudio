@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
 export interface Service {
@@ -37,6 +37,11 @@ export default function ServiceRail({ selected, onToggle, disabled }: ServiceRai
     setAtEnd(el.scrollLeft + el.clientWidth >= el.scrollWidth - 4);
   };
 
+  useEffect(() => {
+    sync();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const nudge = (dir: -1 | 1) => {
     railRef.current?.scrollBy({ left: dir * 260, behavior: "smooth" });
   };
@@ -48,16 +53,25 @@ export default function ServiceRail({ selected, onToggle, disabled }: ServiceRai
         onClick={() => nudge(-1)}
         disabled={atStart}
         aria-label="Previous services"
-        className="absolute -left-1 top-1/2 z-10 -translate-y-1/2 rounded-full border border-white/10 bg-[#13131d] p-1.5 text-slate-400 transition-opacity duration-200 hover:text-white disabled:pointer-events-none disabled:opacity-0"
+        className="absolute left-0 top-1/2 z-20 hidden -translate-y-1/2 rounded-full border border-white/10 bg-[#15151f]/90 p-1.5 text-slate-300 shadow-lg backdrop-blur transition-[opacity,transform] duration-200 hover:scale-105 hover:text-white disabled:pointer-events-none disabled:opacity-0 sm:block"
         data-testid="services-prev"
       >
         <ChevronLeft className="size-4" />
       </button>
 
+      <span
+        aria-hidden="true"
+        className={`pointer-events-none absolute inset-y-0 left-0 z-10 w-14 bg-gradient-to-r from-[#0A0A0F] to-transparent transition-opacity duration-300 ${atStart ? "opacity-0" : "opacity-100"}`}
+      />
+      <span
+        aria-hidden="true"
+        className={`pointer-events-none absolute inset-y-0 right-0 z-10 w-14 bg-gradient-to-l from-[#0A0A0F] to-transparent transition-opacity duration-300 ${atEnd ? "opacity-0" : "opacity-100"}`}
+      />
+
       <div
         ref={railRef}
         onScroll={sync}
-        className="no-scrollbar flex gap-2 overflow-x-auto scroll-smooth px-6"
+        className="no-scrollbar flex gap-2 overflow-x-auto scroll-smooth px-2 sm:px-7"
       >
         {SERVICES.map((s) => {
           const active = selected.includes(s.id);
@@ -85,7 +99,7 @@ export default function ServiceRail({ selected, onToggle, disabled }: ServiceRai
         onClick={() => nudge(1)}
         disabled={atEnd}
         aria-label="More services"
-        className="absolute -right-1 top-1/2 z-10 -translate-y-1/2 rounded-full border border-white/10 bg-[#13131d] p-1.5 text-slate-400 transition-opacity duration-200 hover:text-white disabled:pointer-events-none disabled:opacity-0"
+        className="absolute right-0 top-1/2 z-20 hidden -translate-y-1/2 rounded-full border border-white/10 bg-[#15151f]/90 p-1.5 text-slate-300 shadow-lg backdrop-blur transition-[opacity,transform] duration-200 hover:scale-105 hover:text-white disabled:pointer-events-none disabled:opacity-0 sm:block"
         data-testid="services-next"
       >
         <ChevronRight className="size-4" />

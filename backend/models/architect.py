@@ -45,6 +45,7 @@ class Message(BaseModel):
     attachments: List[Attachment] = Field(default_factory=list)
     site_name: Optional[str] = None
     site_style: Optional[str] = None
+    suggestions: List[str] = Field(default_factory=list)
     html: Optional[str] = None
     created_at: datetime = Field(default_factory=_now)
 
@@ -57,6 +58,8 @@ class Project(BaseModel):
     generating: bool = False
     progress: Optional[str] = None
     progress_step: int = 0
+    progress_pct: int = 0
+    template_id: Optional[str] = None
     share_token: Optional[str] = None
     share_expires_at: Optional[datetime] = None
     messages: List[Message] = Field(default_factory=list)
@@ -86,9 +89,18 @@ class Quota(BaseModel):
     resets_at: datetime
 
 
+class Template(BaseModel):
+    id: str
+    name: str
+    tagline: str
+    best_for: str
+    accent: str
+
+
 class ChatRequest(BaseModel):
     project_id: Optional[str] = None
     text: str
+    template_id: Optional[str] = None
     attachments: List[Attachment] = Field(default_factory=list)
 
 

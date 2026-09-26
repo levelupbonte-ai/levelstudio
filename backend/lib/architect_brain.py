@@ -69,8 +69,10 @@ HARD RULES
 OUTPUT FORMAT — reply with ONE raw JSON object and nothing else. No markdown fences around the JSON.
 A) Questions: {"kind":"questions","text":"<short markdown line>","title":"<3-5 word project title>",
    "questions":[{"label":"...","multi":false,"options":["...","...","..."]}, ...]}
-B) Site: {"kind":"site","text":"<short markdown recap of what you built>","title":"<3-5 word title>",
-   "style":"<design DNA name>","html":"<!DOCTYPE html> ... full document ..."}
+B) Site: {"kind":"site","text":"<markdown recap: what you built, section by section, then one question
+   offering to adjust anything>","title":"<3-5 word title>","style":"<design DNA name>",
+   "suggestions":["<short tweak 1>","<short tweak 2>","<short tweak 3>"],
+   "html":"<!DOCTYPE html> ... full document ..."}
 C) Refusal: {"kind":"refusal","text":"<one polite sentence>"}
 
 SITE QUALITY BAR (kind="site") — the benchmark is a real agency-built site, never a one-screen mockup
@@ -99,8 +101,26 @@ SITE QUALITY BAR (kind="site") — the benchmark is a real agency-built site, ne
   https://picsum.photos/seed/<descriptive-slug>/<w>/<h> (for example
   https://picsum.photos/seed/barber-chair-detail/1200/800). Never use Unsplash, never invent a photo
   id, never hotlink a brand asset. Always set width, height, alt and loading="lazy" on <img>.
+- ICONS AND SVG: hand-written SVG paths go wrong, so never invent path data. Use ONLY these, and
+  nothing else, sized with width/height and fill="currentColor":
+  * a filled circle, rounded square, check, arrow or star built from <circle>, <rect>, <polyline>
+    or <polygon> primitives;
+  * for social links, a labelled pill with the network NAME as text ("Instagram", "Facebook",
+    "TikTok", "YouTube") inside a bordered rounded element, optionally with one of the primitives
+    above. No brand glyphs, no logo paths.
+  Emoji are banned. Decorative visuals come from CSS gradients, borders and blurs.
+- COMPLETENESS IS NON NEGOTIABLE. Take the time you need, but the document must end with
+  </body></html> and every section you mention in the navigation must exist with real content. Never
+  leave a placeholder comment, a TODO, an empty <section>, a duplicated section or a truncated tag.
 - Tasteful motion: hover transitions, scroll reveal via IntersectionObserver, sticky header shrink.
 - Never two identical designs: honour the assigned design DNA and font pairing exactly.
+
+AFTER DELIVERY
+Your "text" for a site walks the person through what they got in plain language (hero, then each
+section, then the interactive bits), and closes by asking what they would like adjusted. Your three
+"suggestions" are short, concrete, single-change tweaks a person could tap, such as "Add a gallery",
+"Warmer colour palette", "Put the price list first". Refinements change only what was asked and keep
+everything else identical.
 """
 
 
@@ -111,7 +131,11 @@ def _client_key() -> str:
     return os.environ.get("EMERGENT_LLM_KEY", "")
 
 
-def build_turn_prompt(transcript: List[Dict[str, Any]], current_html: str | None) -> str:
+def build_turn_prompt(
+    transcript: List[Dict[str, Any]],
+    current_html: str | None,
+    base_template: Dict[str, Any] | None = None,
+) -> str:
     dna = random.choice(DESIGN_DNA)
     fonts = random.choice(FONT_PAIRS)
     parts: List[str] = []
@@ -123,8 +147,15 @@ def build_turn_prompt(transcript: List[Dict[str, Any]], current_html: str | None
     if current_html:
         parts.append(
             "\nAN EXISTING SITE IS ALREADY DELIVERED FOR THIS PROJECT. This turn is a REFINEMENT: "
-            "do not ask questions, return kind='site' with the FULL updated document.\n"
-            "CURRENT DOCUMENT:\n" + current_html[:120000]
+            "do not ask questions, change only what was asked and return kind='site' with the FULL "
+            "updated document.\nCURRENT DOCUMENT:\n" + current_html[:120000]
+        )
+    elif base_template:
+        parts.append(
+            f"\nTHE PERSON PICKED THE STARTER DESIGN '{base_template['name']}' "
+            f"({base_template['tagline']}). Keep its visual language — palette, type, spacing, "
+            "component shapes — and rebuild it around their business with far more content.\n"
+            "STARTER DESIGN:\n" + str(base_template.get("html", ""))[:60000]
         )
     else:
         parts.append(f"\nASSIGNED DESIGN DNA for this generation: {dna}")
@@ -157,6 +188,7 @@ async def run_architect(
     transcript: List[Dict[str, Any]],
     current_html: str | None,
     images: List[Dict[str, str]],
+    base_template: Dict[str, Any] | None = None,
 ) -> Dict[str, Any]:
     chat = LlmChat(
         api_key=_client_key(),
@@ -168,7 +200,7 @@ async def run_architect(
     except Exception:  # pragma: no cover — older builds without with_params
         pass
 
-    prompt = build_turn_prompt(transcript, current_html)
+    prompt = build_turn_prompt(transcript, current_html, base_template)
     message = UserMessage(text=prompt)
 
     if images:
