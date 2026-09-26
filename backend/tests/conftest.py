@@ -45,3 +45,55 @@ async def aclient():
 
 
 # --- app-specific fixtures below this line ---
+
+import uuid
+from datetime import datetime, timedelta, timezone
+
+import pymongo
+
+MONGO_URL = os.environ.get("MONGO_URL", "mongodb://localhost:27017")
+DB_NAME = os.environ.get("DB_NAME", "levelup_studio")
+
+
+@pytest.fixture
+def mongo_db():
+    """Sync pymongo handle to the app's DB — for seeding/cleaning tscheck-* fixture rows."""
+    mc = pymongo.MongoClient(MONGO_URL)
+    try:
+        yield mc[DB_NAME]
+    finally:
+        mc.close()
+
+
+@pytest.fixture
+def fixture_session(mongo_db):
+    """Seeds a fresh user + session cookie for this test only; cleans up afterwards.
+
+    Yields (cookie_dict, user_id) so tests can pass cookies=... to httpx.
+    """
+    suffix = uuid.uuid4().hex[:10]
+    user_id = f"tscheck-user-{suffix}"
+    token = f"tscheck-tok-{suffix}"
+    now = datetime.now(timezone.utc)
+    mongo_db.users.insert_one(
+        {
+            "user_id": user_id,
+            "email": f"{user_id}@example.com",
+            "name": "TSCheck Fixture User",
+            "picture": "",
+            "created_at": now,
+        }
+    )
+    mongo_db.user_sessions.insert_one(
+        {
+            "user_id": user_id,
+            "session_token": token,
+            "expires_at": now + timedelta(days=7),
+            "created_at": now,
+        }
+    )
+    try:
+        yield {"session_token": token}, user_id
+    finally:
+        mongo_db.users.delete_one({"user_id": user_id})
+        mongo_db.user_sessions.delete_one({"session_token": token})

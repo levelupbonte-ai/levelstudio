@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ArrowUp, FileText, ImageIcon, Paperclip, Square, X } from "lucide-react";
+import { ArrowUp, FileText, ImageIcon, Plus, Square, X } from "lucide-react";
 import { toast } from "sonner";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
@@ -39,7 +39,7 @@ function classify(file: File): Attachment["kind"] {
 async function toAttachment(file: File): Promise<Attachment> {
   const kind = classify(file);
   if (kind === "text") {
-    return { name: file.name, mime: file.type || "text/plain", kind, data: await file.text() };
+    return { name: file.name, mime: file.type || "text/plain", kind, data: await file.text(), scan: "ok" };
   }
   if (kind === "image") {
     const data = await new Promise<string>((resolve) => {
@@ -47,9 +47,9 @@ async function toAttachment(file: File): Promise<Attachment> {
       reader.onload = () => resolve(String(reader.result).split(",")[1] ?? "");
       reader.readAsDataURL(file);
     });
-    return { name: file.name, mime: file.type, kind, data };
+    return { name: file.name, mime: file.type, kind, data, scan: "ok" };
   }
-  return { name: file.name, mime: file.type || "application/octet-stream", kind, data: "" };
+  return { name: file.name, mime: file.type || "application/octet-stream", kind, data: "", scan: "ok" };
 }
 
 export interface Chip {
@@ -241,10 +241,10 @@ export default function Composer({
               <PopoverTrigger
                 disabled={disabled}
                 aria-label="Add an image or a file"
-                className="rounded-full p-2 text-slate-400 transition-colors duration-200 hover:bg-white/5 hover:text-violet-200 disabled:opacity-40"
+                className="grid size-9 place-items-center rounded-full border border-white/10 bg-white/[0.02] text-slate-300 transition-[background-color,border-color,color] duration-200 hover:border-violet-400/50 hover:bg-violet-500/10 hover:text-white disabled:opacity-40"
                 data-testid="attach-file-button"
               >
-                <Paperclip className="size-[18px]" />
+                <Plus className="size-[18px]" />
               </PopoverTrigger>
               <PopoverContent
                 align="start"

@@ -21,10 +21,24 @@ INDEXES: dict[str, list[IndexModel]] = {
     "status_checks": [IndexModel([("timestamp", DESCENDING)], name="timestamp_desc")],
     "projects": [
         IndexModel([("id", ASCENDING)], name="id", unique=True),
+        IndexModel([("user_id", ASCENDING), ("updated_at", DESCENDING)], name="owner_updated"),
         IndexModel([("updated_at", DESCENDING)], name="updated_desc"),
         IndexModel([("share_token", ASCENDING)], name="share_token", sparse=True),
     ],
     "usage": [IndexModel([("day", ASCENDING)], name="day", unique=True)],
+    "users": [
+        IndexModel([("user_id", ASCENDING)], name="user_id", unique=True),
+        IndexModel([("email", ASCENDING)], name="email", unique=True),
+    ],
+    "user_sessions": [
+        IndexModel([("session_token", ASCENDING)], name="session_token", unique=True),
+        IndexModel([("user_id", ASCENDING)], name="session_user"),
+        IndexModel([("expires_at", ASCENDING)], name="expires_at", expireAfterSeconds=0),
+    ],
+    "templates": [
+        IndexModel([("id", ASCENDING)], name="id", unique=True),
+        IndexModel([("service", ASCENDING), ("kind", ASCENDING)], name="service_kind"),
+    ],
 }
 
 

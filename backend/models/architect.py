@@ -1,4 +1,4 @@
-"""Pydantic v2 models for the Level IA architect workspace."""
+"""Pydantic v2 models for the LevelUp Studio architect workspace."""
 
 import uuid
 from datetime import datetime, timezone
@@ -21,6 +21,8 @@ class Attachment(BaseModel):
     kind: Literal["image", "text", "pdf", "other"] = "other"
     # base64 payload (images) or extracted text (code / text files)
     data: str = ""
+    # If scanning rejected the file, we still surface a chip with a reason.
+    scan: Literal["ok", "unsupported", "too_large", "empty"] = "ok"
 
 
 class Choice(BaseModel):
@@ -39,7 +41,7 @@ class Question(BaseModel):
 class Message(BaseModel):
     id: str = Field(default_factory=_uid)
     role: Literal["user", "assistant"] = "assistant"
-    kind: Literal["text", "questions", "site", "refusal", "error"] = "text"
+    kind: Literal["text", "questions", "site", "refusal", "error", "analysis"] = "text"
     text: str = ""
     questions: List[Question] = Field(default_factory=list)
     attachments: List[Attachment] = Field(default_factory=list)
@@ -52,6 +54,7 @@ class Message(BaseModel):
 
 class Project(BaseModel):
     id: str = Field(default_factory=_uid)
+    user_id: Optional[str] = None  # owner — set at creation
     title: str = "New project"
     style: Optional[str] = None
     html: Optional[str] = None
@@ -59,6 +62,9 @@ class Project(BaseModel):
     progress: Optional[str] = None
     progress_step: int = 0
     progress_pct: int = 0
+    # A short line the ticker refreshes every 2s so the mouse cursor / mobile note
+    # know what the architect is doing right now.
+    progress_focus: Optional[str] = None
     template_id: Optional[str] = None
     share_token: Optional[str] = None
     share_expires_at: Optional[datetime] = None
@@ -94,7 +100,13 @@ class Template(BaseModel):
     name: str
     tagline: str
     best_for: str
+    service: str
     accent: str
+    kind: Literal["starter", "style"] = "starter"
+    palette: List[str] = Field(default_factory=list)
+    fonts: Optional[str] = None
+    sections: List[str] = Field(default_factory=list)
+    brief_prompt: Optional[str] = None  # style cards: the design brief handed to the architect
 
 
 class ChatRequest(BaseModel):
@@ -110,3 +122,22 @@ class ChatResponse(BaseModel):
 
     project: Project
     quota: Quota
+
+
+class User(BaseModel):
+    user_id: str
+    email: str
+    name: str
+    picture: Optional[str] = None
+    created_at: datetime = Field(default_factory=_now)
+
+
+class Session(BaseModel):
+    user_id: str
+    session_token: str
+    expires_at: datetime
+    created_at: datetime = Field(default_factory=_now)
+
+
+class SessionExchange(BaseModel):
+    session_id: str

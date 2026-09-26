@@ -1,47 +1,85 @@
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Loader2, Menu, PanelRightClose, Plus } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { Loader2, LogOut, Sparkles, X } from "lucide-react";
 import { toast } from "sonner";
 import { Toaster } from "@/components/ui/sonner";
 import BuildProgress from "@/components/BuildProgress";
 import Composer, { type Chip } from "@/components/Composer";
+import LoginGate from "@/components/LoginGate";
 import Markdown from "@/components/Markdown";
 import QuestionWizard from "@/components/QuestionWizard";
 import ServiceRail, { type Service } from "@/components/ServiceRail";
 import SiteDeliveryCard, { PreviewFrame } from "@/components/SiteDeliveryCard";
-import Sidebar from "@/components/Sidebar";
 import TemplateGallery from "@/components/TemplateGallery";
 import { ApiError, apiDelete, apiGet, apiPost } from "@/lib/api";
-import type { Attachment, ChatResponse, Message, Project, ProjectSummary, Quota } from "@/lib/types";
+import { logout, useAuth } from "@/lib/auth";
+import type {
+  Attachment,
+  ChatResponse,
+  Message,
+  Project,
+  ProjectSummary,
+  Quota,
+} from "@/lib/types";
 
-/** The side canvas is a desktop affordance: on a phone the preview opens full screen instead. */
-function useIsWide() {
-  const [wide, setWide] = useState(() => window.innerWidth >= 1280);
+function useIsDesktop() {
+  const [wide, setWide] = useState(() => window.innerWidth >= 1024);
   useEffect(() => {
-    const onResize = () => setWide(window.innerWidth >= 1280);
+    const onResize = () => setWide(window.innerWidth >= 1024);
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
   }, []);
   return wide;
 }
 
+function useIsMobile() {
+  const [mobile, setMobile] = useState(() => window.innerWidth < 768);
+  useEffect(() => {
+    const onResize = () => setMobile(window.innerWidth < 768);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+  return mobile;
+}
+
 export default function Home() {
-  const isWide = useIsWide();
+  const nav = useNavigate();
+  const isDesktop = useIsDesktop();
+  const isMobile = useIsMobile();
   const qc = useQueryClient();
+  const { user, loading: authLoading } = useAuth();
+
   const [activeId, setActiveId] = useState<string | null>(null);
-  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [picked, setPicked] = useState<Service[]>([]);
   const [template, setTemplate] = useState<string | null>(null);
   const [quotaNotice, setQuotaNotice] = useState<string | null>(null);
-  const [canvasOpen, setCanvasOpen] = useState(true);
+  const [loginOpen, setLoginOpen] = useState(false);
+  const [loginReason, setLoginReason] = useState<string | undefined>(undefined);
+  const [mobilePreview, setMobilePreview] = useState<string | null>(null); // messageId of site to fullscreen on mobile
+
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Restore a template picked from /templates
+  useEffect(() => {
+    try {
+      const t = window.sessionStorage.getItem("selected_template");
+      if (t) {
+        setTemplate(t);
+        window.sessionStorage.removeItem("selected_template");
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
 
   const quotaQuery = useQuery({ queryKey: ["quota"], queryFn: () => apiGet<Quota>("/quota") });
 
   const projectsQuery = useQuery({
     queryKey: ["projects"],
     queryFn: () => apiGet<ProjectSummary[]>("/projects"),
+    enabled: Boolean(user),
   });
 
   const projectQuery = useQuery({
@@ -62,12 +100,16 @@ export default function Home() {
     onSuccess: (res) => {
       setPicked([]);
       setActiveId(res.project.id);
-      setCanvasOpen(true);
       qc.setQueryData(["project", res.project.id], res.project);
       qc.setQueryData(["quota"], res.quota);
       void qc.invalidateQueries({ queryKey: ["projects"] });
     },
     onError: (err) => {
+      if (err instanceof ApiError && err.status === 401) {
+        setLoginReason("Sign in to save this build and share it later.");
+        setLoginOpen(true);
+        return;
+      }
       if (err instanceof ApiError && err.status === 429) {
         const detail =
           err.body && typeof err.body === "object"
@@ -113,7 +155,9 @@ export default function Home() {
       ? lastMessage
       : null;
   const lastSite = [...messages].reverse().find((m) => m.kind === "site" && m.html) ?? null;
-  const showCanvas = isWide && canvasOpen && (generating || Boolean(lastSite));
+  const canvasVisible = isDesktop && (generating || Boolean(lastSite));
+  const fullscreenSite =
+    mobilePreview && messages.find((m) => m.id === mobilePreview && m.kind === "site" && m.html);
 
   const delivered = useRef<string | null>(null);
   useEffect(() => {
@@ -128,10 +172,18 @@ export default function Home() {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages.length, busy, project?.progress_step, openQuestions]);
 
+  const requireAuth = (reason?: string): boolean => {
+    if (user) return true;
+    setLoginReason(reason);
+    setLoginOpen(true);
+    return false;
+  };
+
   const send = (text: string, attachments: Attachment[]) => {
+    if (!requireAuth()) return;
     if (outOfQuota) {
       setQuotaNotice(
-        "We have reached the studio's build budget for today. Your projects stay saved in the sidebar, so you can keep reviewing every preview and share link. Come back tomorrow, or contact LevelUp Studio to turn one of them into your real website right away.",
+        "We have reached the studio's build budget for today. Your projects stay saved in your workspace, so you can keep reviewing every preview and share link. Come back tomorrow, or contact LevelUp Studio to turn one of them into your real website right away.",
       );
       return;
     }
@@ -166,128 +218,146 @@ export default function Home() {
     setPicked([]);
     setTemplate(null);
     setQuotaNotice(null);
-    setSidebarOpen(false);
   };
-
-  const sidebar = (afterSelect?: () => void) => (
-    <Sidebar
-      projects={projectsQuery.data ?? []}
-      loading={projectsQuery.isLoading}
-      activeId={activeId}
-      onSelect={(id) => {
-        setActiveId(id);
-        setCanvasOpen(true);
-        afterSelect?.();
-      }}
-      onDelete={(id) => remove.mutate(id)}
-      onNew={startNew}
-      onClose={() => setSidebarOpen(false)}
-    />
-  );
 
   return (
     <div className="flex h-dvh w-full overflow-hidden bg-[#0A0A0F] text-slate-100">
       <Toaster richColors />
-
-      <div className="hidden w-[262px] shrink-0 lg:block">{sidebar()}</div>
-
-      {sidebarOpen && (
-        <div className="fixed inset-0 z-50 lg:hidden" data-testid="mobile-sidebar">
-          <button
-            type="button"
-            className="absolute inset-0 bg-black/70 backdrop-blur-sm"
-            onClick={() => setSidebarOpen(false)}
-            aria-label="Close sidebar"
-          />
-          <div className="absolute inset-y-0 left-0 w-[288px] max-w-[86vw] shadow-2xl">
-            {sidebar(() => setSidebarOpen(false))}
-          </div>
-        </div>
-      )}
+      <LoginGate open={loginOpen} onClose={() => setLoginOpen(false)} reason={loginReason} />
 
       <main className="flex min-h-0 min-w-0 flex-1 flex-col">
+        {/* Slim top bar — no sidebar on PC per spec, brand + auth on the right. */}
         <header
-          className="flex shrink-0 items-center justify-between gap-3 border-b border-white/6 px-3 py-3 sm:px-5"
+          className="flex shrink-0 items-center justify-between gap-3 border-b border-white/6 px-4 py-3 sm:px-6"
           data-testid="app-header"
         >
-          <div className="flex min-w-0 items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setSidebarOpen(true)}
-              className="rounded-md p-1.5 text-slate-400 hover:text-white lg:hidden"
-              aria-label="Open sidebar"
-              data-testid="sidebar-open-button"
-            >
-              <Menu className="size-5" />
-            </button>
-            <span className="font-heading text-[15px] font-semibold tracking-tight text-white lg:hidden">
-              LevelUp<span className="text-violet-400">Studio</span>
-            </span>
-            <p
-              className="hidden truncate text-[13px] text-slate-400 lg:block"
-              data-testid="header-project-title"
-            >
-              {project ? project.title : "Senior web architect"}
-            </p>
-          </div>
-          <div className="flex shrink-0 items-center gap-2">
-            {(generating || lastSite) && (
-              <button
-                type="button"
-                onClick={() => setCanvasOpen((v) => !v)}
-                className="hidden items-center gap-1.5 rounded-full border border-white/10 px-3 py-1.5 text-[13px] text-slate-300 transition-colors duration-200 hover:border-violet-400/40 hover:text-white xl:inline-flex"
-                data-testid="toggle-canvas-button"
-              >
-                <PanelRightClose className="size-3.5" />
-                {showCanvas ? "Hide canvas" : "Show canvas"}
-              </button>
-            )}
+          <div className="flex min-w-0 items-center gap-3">
             <button
               type="button"
               onClick={startNew}
-              className="inline-flex items-center gap-1.5 rounded-full border border-white/10 px-3 py-1.5 text-[13px] text-slate-300 transition-colors duration-200 hover:border-violet-400/40 hover:text-white"
-              data-testid="header-new-project-button"
+              className="font-heading text-[16px] font-semibold tracking-tight text-white transition-opacity duration-200 hover:opacity-80"
+              data-testid="brand-home-button"
             >
-              <Plus className="size-3.5" /> New
+              LevelUp<span className="text-violet-400">Studio</span>
             </button>
+            {project && (
+              <span
+                className="hidden truncate rounded-full border border-white/10 px-3 py-1 text-[12px] text-slate-400 sm:inline-block"
+                data-testid="header-project-title"
+              >
+                {project.title}
+              </span>
+            )}
+          </div>
+
+          <div className="flex shrink-0 items-center gap-2">
+            {user && activeId && (
+              <button
+                type="button"
+                onClick={startNew}
+                className="inline-flex items-center gap-1.5 rounded-full border border-white/10 px-3 py-1.5 text-[12.5px] text-slate-300 transition-colors duration-200 hover:border-violet-400/40 hover:text-white"
+                data-testid="header-new-project-button"
+              >
+                <Sparkles className="size-3.5" /> New
+              </button>
+            )}
+            {authLoading ? null : user ? (
+              <div className="flex items-center gap-2">
+                {projectsQuery.data && projectsQuery.data.length > 0 && !activeId && (
+                  <select
+                    className="hidden max-w-[180px] truncate rounded-full border border-white/10 bg-white/[0.02] px-3 py-1.5 text-[12.5px] text-slate-300 sm:inline-block"
+                    value=""
+                    onChange={(e) => {
+                      if (e.target.value) setActiveId(e.target.value);
+                    }}
+                    data-testid="header-projects-dropdown"
+                  >
+                    <option value="">My projects</option>
+                    {projectsQuery.data.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.title}
+                      </option>
+                    ))}
+                  </select>
+                )}
+                {user.picture ? (
+                  <img
+                    src={user.picture}
+                    alt={user.name}
+                    className="size-8 rounded-full border border-white/10 object-cover"
+                    data-testid="user-avatar"
+                  />
+                ) : (
+                  <span
+                    className="grid size-8 place-items-center rounded-full bg-gradient-to-br from-violet-500 to-fuchsia-600 text-[12px] font-semibold text-white"
+                    data-testid="user-avatar"
+                  >
+                    {user.name.slice(0, 1).toUpperCase()}
+                  </span>
+                )}
+                <button
+                  type="button"
+                  onClick={() => void logout()}
+                  aria-label="Sign out"
+                  className="rounded-full p-1.5 text-slate-500 hover:text-slate-200"
+                  data-testid="logout-button"
+                >
+                  <LogOut className="size-4" />
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setLoginOpen(true)}
+                className="rounded-full bg-white px-4 py-1.5 text-[12.5px] font-semibold text-slate-900 transition-transform duration-200 active:scale-[0.98]"
+                data-testid="header-signin-button"
+              >
+                Sign in
+              </button>
+            )}
           </div>
         </header>
 
         {!activeId ? (
+          // ------- Hero + composer + services + gallery -------
           <div
-            className="no-scrollbar relative flex min-h-0 flex-1 flex-col justify-center overflow-y-auto px-4 py-8 sm:px-6"
+            className="no-scrollbar relative flex min-h-0 flex-1 flex-col overflow-y-auto px-4 pb-14 pt-10 sm:px-6"
             data-testid="hero-section"
           >
             <div
               aria-hidden="true"
-              className="pointer-events-none absolute inset-x-0 top-0 h-[360px]"
+              className="pointer-events-none absolute inset-x-0 top-0 h-[420px]"
               style={{
                 background:
                   "radial-gradient(ellipse 60% 100% at 50% 0%, rgba(124,58,237,0.16), transparent 70%)",
               }}
             />
-            <div className="relative mx-auto w-full max-w-[720px]">
+            <div className="relative mx-auto flex w-full max-w-[820px] flex-col items-center">
+              <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.02] px-3 py-1 text-[10.5px] font-medium uppercase tracking-[0.22em] text-violet-200">
+                <Sparkles className="size-3" />
+                Senior web architect
+              </span>
               <h1
-                className="text-center font-heading text-[26px] font-semibold leading-[1.15] tracking-tight text-white sm:text-[42px]"
+                className="mt-5 text-center font-heading text-[30px] font-semibold leading-[1.1] tracking-tight text-white sm:text-[46px]"
                 data-testid="hero-title"
               >
                 What are we building today?
               </h1>
-              <p className="mx-auto mt-3 max-w-md text-center text-[14px] leading-relaxed text-slate-400 sm:text-[15px]">
-                Tell me about your business. I ask a few questions, then deliver a complete website
-                you can preview and share.
+              <p className="mx-auto mt-4 max-w-lg text-center text-[14.5px] leading-relaxed text-slate-400 sm:text-[15.5px]">
+                Tell me about your business. I analyse your brief, ask a few sharp questions, then
+                deliver a complete website you can preview and share.
               </p>
 
               {quotaNotice && (
                 <div
-                  className="mt-6 rounded-2xl border border-white/10 bg-[#12121c] p-4"
+                  className="mt-6 w-full rounded-2xl border border-white/10 bg-[#12121c] p-4"
                   data-testid="quota-notice"
                 >
                   <Markdown text={quotaNotice} />
                 </div>
               )}
 
-              <div className="mt-7">
+              <div className="mt-8 w-full">
                 <Composer
                   onSend={send}
                   busy={busy}
@@ -299,7 +369,7 @@ export default function Home() {
                 />
               </div>
 
-              <div className="mt-5">
+              <div className="mt-5 w-full">
                 <ServiceRail
                   selected={picked.map((p) => p.id)}
                   onToggle={toggleService}
@@ -307,14 +377,20 @@ export default function Home() {
                 />
               </div>
 
-              <div className="mt-8">
-                <TemplateGallery selected={template} onSelect={setTemplate} disabled={busy} />
+              <div className="mt-14 w-full">
+                <TemplateGallery
+                  selected={template}
+                  onSelect={setTemplate}
+                  disabled={busy}
+                  onSeeAll={() => nav("/templates")}
+                  limit={isMobile ? 6 : 12}
+                />
               </div>
             </div>
           </div>
         ) : (
+          // ------- Active project: chat column (+ canvas on desktop) -------
           <div className="flex min-h-0 flex-1">
-            {/* Conversation column */}
             <div className="flex min-h-0 min-w-0 flex-1 flex-col">
               <div
                 ref={scrollRef}
@@ -334,7 +410,6 @@ export default function Home() {
                       className="mb-7 flex justify-end"
                       data-testid={`user-message-${m.id}`}
                     >
-                      {/* User answers stay regular weight, unlike the architect's bold questions. */}
                       <div className="max-w-[85%] animate-rise-in whitespace-pre-wrap rounded-2xl rounded-br-md bg-white/[0.05] px-4 py-2.5 text-[14px] font-normal leading-relaxed text-slate-300">
                         {m.text}
                         {m.attachments.length > 0 && (
@@ -345,7 +420,17 @@ export default function Home() {
                       </div>
                     </div>
                   ) : (
-                    <div key={m.id} className="mb-8" data-testid={`assistant-message-${m.id}`}>
+                    <div
+                      key={m.id}
+                      className="mb-8"
+                      data-testid={`assistant-message-${m.id}`}
+                    >
+                      {m.kind === "analysis" && (
+                        <div className="mb-2 flex items-center gap-2 text-[11px] uppercase tracking-[0.2em] text-violet-300">
+                          <span className="size-1.5 rounded-full bg-violet-400" />
+                          Understanding your brief
+                        </div>
+                      )}
                       <Markdown text={m.text} />
                       {m.kind === "site" && m.html && (
                         <SiteDeliveryCard
@@ -356,7 +441,10 @@ export default function Home() {
                           projectId={project!.id}
                           messageId={m.id}
                           onRequestChange={requestChange}
-                          showPreviewButton={!showCanvas || m.id !== lastSite?.id}
+                          onOpenPreview={() =>
+                            isDesktop ? void 0 : setMobilePreview(m.id)
+                          }
+                          compact={isDesktop && m.id === lastSite?.id}
                         />
                       )}
                       {m.kind === "questions" && m.id !== openQuestions?.id && (
@@ -366,13 +454,14 @@ export default function Home() {
                   ),
                 )}
 
-                {busy && !showCanvas && (
+                {busy && !canvasVisible && (
                   <div className="mb-8" aria-live="polite">
                     <BuildProgress
                       step={project?.progress_step ?? 0}
                       pct={project?.progress_pct ?? 1}
+                      focus={project?.progress_focus}
                       onStop={() => project && stop.mutate(project.id)}
-                      compact
+                      mode="mobile"
                     />
                   </div>
                 )}
@@ -408,30 +497,66 @@ export default function Home() {
               </div>
             </div>
 
-            {/* Canvas column: the site as it is being built, live */}
-            {showCanvas && (
+            {canvasVisible && project && (
               <aside
-                className="hidden min-h-0 w-[48%] shrink-0 flex-col border-l border-white/6 p-3 xl:flex"
+                className="hidden min-h-0 w-[52%] shrink-0 flex-col border-l border-white/6 p-3 lg:flex"
                 data-testid="site-canvas"
               >
                 {generating || !lastSite?.html ? (
                   <BuildProgress
-                    step={project?.progress_step ?? 0}
-                    pct={project?.progress_pct ?? 1}
-                    onStop={() => project && stop.mutate(project.id)}
+                    step={project.progress_step ?? 0}
+                    pct={project.progress_pct ?? 1}
+                    focus={project.progress_focus}
+                    onStop={() => stop.mutate(project.id)}
+                    mode="desktop"
                   />
                 ) : (
                   <PreviewFrame
                     html={lastSite.html}
-                    name={lastSite.site_name ?? project?.title ?? "site"}
+                    name={lastSite.site_name ?? project.title ?? "site"}
+                    projectId={project.id}
                     messageId={lastSite.id}
+                    onRequestChange={() => requestChange()}
                   />
                 )}
               </aside>
             )}
+
+            {activeId && !generating && !isDesktop && lastSite && !mobilePreview && (
+              <button
+                type="button"
+                onClick={() => remove.mutate(project!.id)}
+                aria-label="Delete project"
+                className="fixed bottom-24 right-4 z-30 hidden rounded-full border border-white/10 bg-[#12121c] p-2 text-slate-500 shadow-lg hover:text-red-300 sm:block"
+                data-testid="delete-project-button"
+              >
+                <X className="size-4" />
+              </button>
+            )}
           </div>
         )}
       </main>
+
+      {/* Mobile / non-desktop fullscreen preview */}
+      {fullscreenSite && (
+        <div
+          className="fixed inset-0 z-[60] flex flex-col bg-[#07070c] p-2 sm:p-4"
+          data-testid="mobile-preview-overlay"
+        >
+          <PreviewFrame
+            html={fullscreenSite.html!}
+            name={fullscreenSite.site_name ?? project?.title ?? "site"}
+            projectId={project!.id}
+            messageId={fullscreenSite.id}
+            onClose={() => setMobilePreview(null)}
+            onRequestChange={() => {
+              setMobilePreview(null);
+              requestChange();
+            }}
+            fullscreen
+          />
+        </div>
+      )}
     </div>
   );
 }

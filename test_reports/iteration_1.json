@@ -9,7 +9,7 @@
       "name": "test_tscheck_share_link.py",
       "lane": "backend",
       "status": "passed",
-      "evidence": "POST /api/projects/22089b5f-.../share -> 200; GET https://web-architect-46.preview.emergentagent.com<share path> -> 200 with HTML body and X-Robots-Tag: noindex; GET /api/share/deadbeefdeadbeef -> 404. 2/2 assertions passed in test_share_link.py."
+      "evidence": "POST /api/projects/22089b5f-.../share -> 200; GET https://imported-repos-hub.preview.emergentagent.com<share path> -> 200 with HTML body and X-Robots-Tag: noindex; GET /api/share/deadbeefdeadbeef -> 404. 2/2 assertions passed in test_share_link.py."
     },
     {
       "criterion": "Backend: a running build shows step-by-step progress and can be stopped",

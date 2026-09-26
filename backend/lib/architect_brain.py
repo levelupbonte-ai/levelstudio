@@ -1,11 +1,11 @@
-"""The locked 'senior web architect' brain: prompt, design DNA pool, JSON contract."""
+"""The locked 'senior web architect' brain: analysis + build prompts, design DNA pool, JSON contract."""
 
 import asyncio
 import json
 import os
 import random
 import re
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from emergentintegrations.llm.chat import LlmChat, UserMessage
 
@@ -56,18 +56,20 @@ HARD RULES
 3. MIRROR THE USER'S LANGUAGE. If they write French, everything you write — your text, your
    questions, your options AND all the copy inside the generated site — is in French. Same for
    English, Spanish, etc. Detect it from their latest messages.
-4. Before the first build, ask 4 or 5 sharp questions that a real studio would ask: business name,
-   city/neighbourhood, services offered, main goal (more bookings / look professional / sell online /
-   showcase work), visual mood, what a client account would mean for them. Each question has 3 to 5
-   short option labels. Set "multi": true on questions where several answers make sense (services,
-   sections wanted, features) and "multi": false on single-choice ones. The person may also type a
-   custom answer, so keep the options concrete. Never ask a second round in the same project — if the
-   conversation already contains one, you MUST build.
+4. BEFORE the first build, ask 4 or 5 sharp questions **grounded in what the user actually said**.
+   Every question must clearly reference their specific business, service, city or goal — never a
+   generic template. Bad: "What is your business type?". Good: "For your barbershop in Lyon, which
+   services should headline the menu?". Options are 3 to 5 concrete labels tailored to their trade.
+   Set "multi": true where several answers make sense (services, sections wanted, features) and
+   "multi": false on single-choice ones. The person may also type a custom answer, so keep options
+   concrete. Never ask a second round in the same project — if the conversation already contains
+   one, you MUST build.
 5. A refinement request on an existing site: never ask questions, return the FULL updated document.
 6. Write like a human: no em dashes, no underscores, no filler. Short sentences.
 
 OUTPUT FORMAT — reply with ONE raw JSON object and nothing else. No markdown fences around the JSON.
-A) Questions: {"kind":"questions","text":"<short markdown line>","title":"<3-5 word project title>",
+A) Questions: {"kind":"questions","text":"<one-line markdown acknowledging what you understood so far>",
+   "title":"<3-5 word project title>",
    "questions":[{"label":"...","multi":false,"options":["...","...","..."]}, ...]}
 B) Site: {"kind":"site","text":"<markdown recap: what you built, section by section, then one question
    offering to adjust anything>","title":"<3-5 word title>","style":"<design DNA name>",
@@ -116,11 +118,29 @@ SITE QUALITY BAR (kind="site") — the benchmark is a real agency-built site, ne
 - Never two identical designs: honour the assigned design DNA and font pairing exactly.
 
 AFTER DELIVERY
-Your "text" for a site walks the person through what they got in plain language (hero, then each
-section, then the interactive bits), and closes by asking what they would like adjusted. Your three
-"suggestions" are short, concrete, single-change tweaks a person could tap, such as "Add a gallery",
-"Warmer colour palette", "Put the price list first". Refinements change only what was asked and keep
-everything else identical.
+Your "text" for a site is a clean **Markdown recap** written like a real design lead handing off
+work. Use bold section names, a short list of what each section contains, then one sentence at the
+end asking what to adjust. Example structure:
+
+**Hero** — bold headline + sticky booking CTA.
+**Services** — five services with prices and durations.
+**Team** — three barber cards with photos.
+**Book a chair** — form wired to a preview modal.
+
+_Tell me what to tune and I'll adjust just that._
+
+Your three "suggestions" are short, concrete, single-change tweaks a person could tap, such as
+"Add a gallery", "Warmer colour palette", "Put the price list first". Refinements change only what
+was asked and keep everything else identical.
+"""
+
+
+_ANALYSIS_SYSTEM = """You are the intake note-taker for LevelUp Studio's senior web architect.
+Read the visitor's first message and write ONE short paragraph (max 3 sentences, ~50 words) that
+summarises what you understood: their business type, their city or context if mentioned, their
+apparent goal, and one specific detail worth remembering. Match the visitor's language exactly.
+Write in warm Markdown, no code, no lists, no headings, no fences. End with a short sentence such
+as "Let me ask a few sharp questions before I build.". Do not ask any question yourself.
 """
 
 
@@ -133,8 +153,8 @@ def _client_key() -> str:
 
 def build_turn_prompt(
     transcript: List[Dict[str, Any]],
-    current_html: str | None,
-    base_template: Dict[str, Any] | None = None,
+    current_html: Optional[str],
+    base_template: Optional[Dict[str, Any]] = None,
 ) -> str:
     dna = random.choice(DESIGN_DNA)
     fonts = random.choice(FONT_PAIRS)
@@ -150,7 +170,7 @@ def build_turn_prompt(
             "do not ask questions, change only what was asked and return kind='site' with the FULL "
             "updated document.\nCURRENT DOCUMENT:\n" + current_html[:120000]
         )
-    elif base_template:
+    elif base_template and base_template.get("kind") == "starter":
         parts.append(
             f"\nTHE PERSON PICKED THE STARTER DESIGN '{base_template['name']}' "
             f"({base_template['tagline']}). Keep its visual language — palette, type, spacing, "
@@ -186,9 +206,9 @@ def _extract_json(raw: str) -> Dict[str, Any]:
 async def run_architect(
     session_id: str,
     transcript: List[Dict[str, Any]],
-    current_html: str | None,
+    current_html: Optional[str],
     images: List[Dict[str, str]],
-    base_template: Dict[str, Any] | None = None,
+    base_template: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     chat = LlmChat(
         api_key=_client_key(),
@@ -196,8 +216,8 @@ async def run_architect(
         system_message=SYSTEM_PROMPT,
     ).with_model(MODEL_PROVIDER, MODEL_NAME)
     try:
-        chat = chat.with_params(max_tokens=32000)  # a full multi-section document is long
-    except Exception:  # pragma: no cover — older builds without with_params
+        chat = chat.with_params(max_tokens=32000)
+    except Exception:  # pragma: no cover
         pass
 
     prompt = build_turn_prompt(transcript, current_html, base_template)
@@ -211,13 +231,11 @@ async def run_architect(
                 text=prompt,
                 file_contents=[ImageContent(image_base64=img["data"]) for img in images],
             )
-        except Exception:  # vision unavailable — degrade to text-only
+        except Exception:
             message = UserMessage(text=prompt)
 
-    # The universal key allows one in-flight completion: serialise, and retry the
-    # provider's concurrency/rate errors with backoff instead of failing the turn.
     async with _CALL_LOCK:
-        last_exc: Exception | None = None
+        last_exc: Optional[Exception] = None
         for attempt in range(4):
             try:
                 raw = await chat.send_message(message)
@@ -230,3 +248,30 @@ async def run_architect(
                     raise
                 await asyncio.sleep(2 * (attempt + 1))
         raise last_exc if last_exc else RuntimeError("architect call failed")
+
+
+async def quick_analysis(user_text: str, style_brief: str = "") -> str:
+    """Cheap first-pass analysis: a warm paragraph confirming what the architect understood.
+    Runs on the same LLM but with the analysis system prompt, ~50 words, no JSON."""
+    if not user_text.strip():
+        return ""
+    chat = LlmChat(
+        api_key=_client_key(),
+        session_id=f"analysis-{random.randint(0, 10**9)}",
+        system_message=_ANALYSIS_SYSTEM,
+    ).with_model(MODEL_PROVIDER, MODEL_NAME)
+    try:
+        chat = chat.with_params(max_tokens=200)
+    except Exception:
+        pass
+    prompt = f"VISITOR MESSAGE:\n{user_text.strip()}"
+    if style_brief:
+        prompt += f"\n\nCHOSEN STYLE BRIEF:\n{style_brief}"
+    async with _CALL_LOCK:
+        try:
+            raw = await chat.send_message(UserMessage(text=prompt))
+        except Exception:
+            return ""
+    text = raw if isinstance(raw, str) else str(raw)
+    # Strip fences/JSON just in case the model deviates
+    return text.strip().strip("`").strip()

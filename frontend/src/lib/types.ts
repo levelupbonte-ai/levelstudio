@@ -5,6 +5,7 @@ export interface Attachment {
   mime: string;
   kind: "image" | "text" | "pdf" | "other";
   data: string;
+  scan: "ok" | "unsupported" | "too_large" | "empty";
 }
 
 export interface Choice {
@@ -23,7 +24,7 @@ export interface Question {
 export interface Message {
   id: string;
   role: "user" | "assistant";
-  kind: "text" | "questions" | "site" | "refusal" | "error";
+  kind: "text" | "questions" | "site" | "refusal" | "error" | "analysis";
   text: string;
   questions: Question[];
   attachments: Attachment[];
@@ -36,6 +37,7 @@ export interface Message {
 
 export interface Project {
   id: string;
+  user_id: string | null;
   title: string;
   style: string | null;
   html: string | null;
@@ -43,6 +45,7 @@ export interface Project {
   progress: string | null;
   progress_step: number;
   progress_pct: number;
+  progress_focus: string | null;
   template_id: string | null;
   share_token: string | null;
   share_expires_at: string | null;
@@ -83,5 +86,19 @@ export interface Template {
   name: string;
   tagline: string;
   best_for: string;
+  service: string;
   accent: string;
+  kind: "starter" | "style";
+  palette: string[];
+  fonts: string | null;
+  sections: string[];
+  brief_prompt: string | null;
+}
+
+export interface User {
+  user_id: string;
+  email: string;
+  name: string;
+  picture: string | null;
+  created_at: string;
 }

@@ -53,10 +53,10 @@ export default function ServiceRail({ selected, onToggle, disabled }: ServiceRai
         onClick={() => nudge(-1)}
         disabled={atStart}
         aria-label="Previous services"
-        className="absolute left-0 top-1/2 z-20 hidden -translate-y-1/2 rounded-full border border-white/10 bg-[#15151f]/90 p-1.5 text-slate-300 shadow-lg backdrop-blur transition-[opacity,transform] duration-200 hover:scale-105 hover:text-white disabled:pointer-events-none disabled:opacity-0 sm:block"
+        className="absolute -left-1 top-1/2 z-20 hidden -translate-y-1/2 items-center justify-center text-slate-500 transition-[opacity,color,transform] duration-200 hover:text-white disabled:pointer-events-none disabled:opacity-0 sm:flex"
         data-testid="services-prev"
       >
-        <ChevronLeft className="size-4" />
+        <ChevronLeft className="size-5" />
       </button>
 
       <span
@@ -99,10 +99,10 @@ export default function ServiceRail({ selected, onToggle, disabled }: ServiceRai
         onClick={() => nudge(1)}
         disabled={atEnd}
         aria-label="More services"
-        className="absolute right-0 top-1/2 z-20 hidden -translate-y-1/2 rounded-full border border-white/10 bg-[#15151f]/90 p-1.5 text-slate-300 shadow-lg backdrop-blur transition-[opacity,transform] duration-200 hover:scale-105 hover:text-white disabled:pointer-events-none disabled:opacity-0 sm:block"
+        className="absolute -right-1 top-1/2 z-20 hidden -translate-y-1/2 items-center justify-center text-slate-500 transition-[opacity,color,transform] duration-200 hover:text-white disabled:pointer-events-none disabled:opacity-0 sm:flex"
         data-testid="services-next"
       >
-        <ChevronRight className="size-4" />
+        <ChevronRight className="size-5" />
       </button>
     </div>
   );
