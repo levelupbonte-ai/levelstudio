@@ -68,7 +68,11 @@ export default function WorkspacePage() {
     try {
       const link = await apiPost<ShareLink>(`/projects/${id}/share`);
       await navigator.clipboard.writeText(`${window.location.origin}${link.path}`);
-      toast.success(`Lien de partage copié (actif jusqu'au ${new Date(link.expires_at).toLocaleDateString("fr-FR")})`);
+      toast.success(
+        link.expires_at
+          ? `Lien de partage copié (actif jusqu'au ${new Date(link.expires_at).toLocaleDateString("fr-FR")})`
+          : "Lien de partage copié"
+      );
     } catch {
       toast.error("Impossible de générer le lien de partage.");
     }
@@ -101,14 +105,19 @@ export default function WorkspacePage() {
             <button
               type="button"
               onClick={() => nav("/")}
-              className="inline-flex items-center gap-2 rounded-full border border-white/10 px-3 py-1.5 text-[12.5px] text-slate-300 transition-colors hover:border-violet-400/40 hover:text-white"
+              className="p-1.5 text-slate-400 hover:text-white transition-colors"
+              title="Retour à l'accueil"
+              aria-label="Retour"
               data-testid="workspace-back-button"
             >
-              <ArrowLeft className="size-3.5" /> Studio
+              <ArrowLeft className="size-5" />
             </button>
-            <span className="font-heading text-[15px] font-semibold text-white">
-              LevelUp<span className="text-violet-400">.Studio</span> Workspace
-            </span>
+            <div className="flex items-center gap-2">
+              <img src="/favicon.svg" alt="LevelUp" className="size-5 shrink-0" />
+              <span className="font-heading text-[15px] font-semibold text-white">
+                LevelUp<span className="text-violet-400">.Studio</span> Workspace
+              </span>
+            </div>
           </div>
 
           <div className="flex items-center gap-3">

@@ -1,7 +1,7 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft, Check, ExternalLink, Layers, Search, Sparkles, Upload } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { apiGet } from "@/lib/api";
 import ImportTemplate from "@/components/ImportTemplate";
 import TemplatePreview from "@/components/TemplatePreview";
@@ -94,6 +94,7 @@ function matches(t: Template, q: string): boolean {
 
 export default function TemplatesPage() {
   const nav = useNavigate();
+  const { templateId } = useParams<{ templateId?: string }>();
   const [filter, setFilter] = useState("all");
   const [q, setQ] = useState("");
   const [preview, setPreview] = useState<Template | null>(null);
@@ -104,6 +105,17 @@ export default function TemplatesPage() {
     queryFn: () => apiGet<Template[]>("/templates"),
     staleTime: 60 * 1000,
   });
+
+  useEffect(() => {
+    if (templateId && templates.length > 0) {
+      const match = templates.find((t) => t.id === templateId);
+      if (match) {
+        setPreview(match);
+      }
+    } else if (!templateId) {
+      setPreview(null);
+    }
+  }, [templateId, templates]);
 
   const filtered = useMemo(() => {
     let list = filter === "all" ? templates : templates.filter((t) => t.service === filter);
@@ -121,21 +133,26 @@ export default function TemplatesPage() {
   };
 
   return (
-    <div className="min-h-dvh w-full bg-[#0A0A0F] text-slate-100" data-testid="templates-page">
+    <div className="min-h-dvh w-full bg-[#0A0A0F] text-slate-100 font-sans" data-testid="templates-page">
       <header className="sticky top-0 z-30 border-b border-white/6 bg-[#0A0A0F]/85 px-4 py-3 backdrop-blur sm:px-6">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <button
               type="button"
               onClick={() => nav("/")}
-              className="inline-flex items-center gap-2 rounded-full border border-white/10 px-3 py-1.5 text-[12.5px] text-slate-300 transition-colors hover:border-violet-400/40 hover:text-white"
+              className="p-1.5 text-slate-400 hover:text-white transition-colors"
+              title="Retour à l'accueil"
+              aria-label="Retour"
               data-testid="templates-back-button"
             >
-              <ArrowLeft className="size-3.5" /> Studio
+              <ArrowLeft className="size-5" />
             </button>
-            <span className="font-heading text-[15px] font-semibold text-white">
-              LevelUp<span className="text-violet-400">.Studio</span> Templates
-            </span>
+            <div className="flex items-center gap-2">
+              <img src="/favicon.svg" alt="LevelUp" className="size-5 shrink-0" />
+              <span className="font-heading text-[15px] font-semibold text-white">
+                LevelUp<span className="text-violet-400">.Studio</span> Templates
+              </span>
+            </div>
           </div>
 
           <div className="flex items-center gap-2">
@@ -208,7 +225,7 @@ export default function TemplatesPage() {
               {/* Thumbnail click to preview */}
               <button
                 type="button"
-                onClick={() => setPreview(t)}
+                onClick={() => nav(`/templates/${t.id}`)}
                 className="relative aspect-[16/10] w-full overflow-hidden bg-slate-950 text-left cursor-pointer"
                 title="Click to preview fullscreen"
               >
@@ -246,7 +263,7 @@ export default function TemplatesPage() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => setPreview(t)}
+                    onClick={() => nav(`/templates/${t.id}`)}
                     className="rounded-xl border border-white/10 p-1.5 text-slate-400 hover:bg-white/5 hover:text-white"
                     title="Fullscreen preview"
                   >
@@ -276,9 +293,9 @@ export default function TemplatesPage() {
       {preview && (
         <TemplatePreview
           template={preview}
-          onClose={() => setPreview(null)}
+          onClose={() => nav("/templates")}
           onReproduce={(id) => {
-            setPreview(null);
+            nav("/templates");
             pick(id);
           }}
         />

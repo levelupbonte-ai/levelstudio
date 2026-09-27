@@ -4,6 +4,7 @@
 import { useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowRight, Check, ChevronLeft, ChevronRight, Layers, Upload } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { apiGet } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import ImportTemplate from "@/components/ImportTemplate";
@@ -87,6 +88,7 @@ function StarterCard({ t, active }: { t: Template; active: boolean }) {
 }
 
 export default function TemplateGallery({ selected, onSelect, disabled, onSeeAll, limit }: TemplateGalleryProps) {
+  const nav = useNavigate();
   const [filter, setFilter] = useState<string>("all");
   const [preview, setPreview] = useState<Template | null>(null);
   const [importOpen, setImportOpen] = useState(false);
@@ -189,7 +191,7 @@ export default function TemplateGallery({ selected, onSelect, disabled, onSeeAll
                 key={t.id}
                 type="button"
                 disabled={disabled}
-                onClick={() => setPreview(t)}
+                onClick={() => nav(`/templates/${t.id}`)}
                 className={cn(
                   "group relative aspect-[4/3] w-[240px] shrink-0 snap-start overflow-hidden rounded-xl border transition-[border-color,transform,box-shadow] duration-300 sm:w-[280px]",
                   active ? "border-violet-400/70 shadow-[0_10px_35px_-15px_rgba(139,92,246,0.7)]" : "border-white/8 hover:-translate-y-0.5 hover:border-white/25",

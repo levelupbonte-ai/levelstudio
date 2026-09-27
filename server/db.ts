@@ -73,7 +73,15 @@ export interface ProjectDoc {
   updated_at: string;
 }
 
-const DATA_DIR = path.resolve(process.cwd(), "server", "data");
+const isServerless = Boolean(
+  process.env.VERCEL ||
+  process.env.AWS_LAMBDA_FUNCTION_NAME ||
+  process.env.LAMBDA_TASK_ROOT ||
+  (process.env.NODE_ENV === "production" && !process.env.AIS_PORT)
+);
+const DATA_DIR = isServerless
+  ? path.join("/tmp", "server-data")
+  : path.resolve(process.cwd(), "server", "data");
 const STORE_PATH = path.join(DATA_DIR, "store.json");
 
 // High-fidelity pre-seeded sites for instant discovery
@@ -537,7 +545,8 @@ class PersistentDb {
     // Seed exemplary showcases if database has no projects
     for (const p of SEED_PROJECTS) {
       if (!this.projects.has(p.id)) {
-        this.projects.set(p.id, { ...p });
+        const lastSiteHtml = [...p.messages].reverse().find(m => m.kind === "site")?.html || null;
+        this.projects.set(p.id, { ...p, html: p.html || lastSiteHtml });
       }
     }
   }

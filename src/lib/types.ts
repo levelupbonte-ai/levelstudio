@@ -1,11 +1,9 @@
-// Hand-written mirrors of backend/models/architect.py — keep both sides in sync.
-
 export interface Attachment {
   name: string;
   mime: string;
   kind: "image" | "text" | "pdf" | "other";
   data: string;
-  scan: "ok" | "unsupported" | "too_large" | "empty";
+  scan?: "ok" | "unsupported" | "too_large" | "empty";
 }
 
 export interface Choice {
@@ -18,7 +16,7 @@ export interface Question {
   label: string;
   options: Choice[];
   multi: boolean;
-  allow_custom: boolean;
+  allow_custom?: boolean;
 }
 
 export interface Message {
@@ -78,7 +76,7 @@ export interface ChatResponse {
 export interface ShareLink {
   url: string;
   path: string;
-  expires_at: string;
+  expires_at: string | null;
 }
 
 export interface Template {
@@ -94,6 +92,7 @@ export interface Template {
   sections: string[];
   brief_prompt: string | null;
   owner_id?: string | null;
+  html?: string;
   created_at?: string | null;
 }
 
@@ -102,5 +101,6 @@ export interface User {
   email: string;
   name: string;
   picture: string | null;
+  role?: "architect" | "member" | "admin";
   created_at: string;
 }

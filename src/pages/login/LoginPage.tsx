@@ -1,31 +1,28 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Database, KeyRound, Loader2, Mail, ShieldCheck, Sparkles, User, Zap } from "lucide-react";
+import { ArrowLeft, Loader2, ShieldCheck, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { Toaster } from "@/components/ui/sonner";
-import { loginAsGuest, loginWithEmail, loginWithGoogle, registerWithEmail, useAuth } from "@/lib/auth";
+import { loginWithGoogle, useAuth } from "@/lib/auth";
 
 export default function LoginPage() {
   const nav = useNavigate();
   const { user } = useAuth();
-  const [tab, setTab] = useState<"login" | "register" | "demo">("login");
-  const [email, setEmail] = useState("");
-  const [name, setName] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // If already logged in, show account info and redirect button
+  // If already logged in, show active session
   if (user) {
     return (
-      <div className="flex min-h-dvh flex-col items-center justify-center bg-[#0A0A0F] px-4 text-slate-100">
+      <div className="flex min-h-dvh flex-col items-center justify-center bg-[#0A0A0F] px-4 text-slate-100 font-sans">
         <Toaster richColors />
         <div className="relative w-full max-w-md overflow-hidden rounded-3xl border border-white/10 bg-[#12111E] p-8 shadow-2xl text-center">
-          <div className="mx-auto mb-4 grid size-14 place-items-center rounded-2xl bg-gradient-to-br from-violet-500 to-indigo-600 shadow-lg">
+          <div className="mx-auto mb-4 grid size-14 place-items-center rounded-2xl bg-gradient-to-br from-violet-500 to-indigo-600 shadow-lg shadow-violet-500/30">
             <ShieldCheck className="size-7 text-white" />
           </div>
           <h2 className="font-heading text-2xl font-bold text-white">Session Active</h2>
           <p className="mt-2 text-sm text-slate-400">
-            Vous êtes connecté en tant que <span className="font-semibold text-violet-300">{user.name}</span> ({user.email}).
+            Connecté en tant que <span className="font-semibold text-violet-300">{user.name}</span> ({user.email}).
           </p>
           <div className="mt-6 flex flex-col gap-3">
             <button
@@ -38,9 +35,9 @@ export default function LoginPage() {
             <button
               type="button"
               onClick={() => nav("/")}
-              className="w-full rounded-xl border border-white/10 py-3 text-sm font-medium text-slate-300 hover:bg-white/5"
+              className="w-full rounded-xl border border-white/10 py-3 text-sm font-medium text-slate-300 hover:bg-white/5 transition-colors"
             >
-              Retourner au Studio de Création
+              Retourner au Studio
             </button>
           </div>
         </div>
@@ -48,36 +45,12 @@ export default function LoginPage() {
     );
   }
 
-  const handleEmailSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!email || !email.includes("@")) {
-      setError("Veuillez saisir une adresse email valide.");
-      return;
-    }
-    setLoading(true);
-    setError(null);
-    try {
-      if (tab === "login") {
-        await loginWithEmail(email);
-        toast.success("Connexion réussie via la base de données.");
-      } else {
-        await registerWithEmail(name || "Architecte Senior", email);
-        toast.success("Compte architecte créé et sauvegardé en base de données.");
-      }
-      nav("/workspace");
-    } catch (err: any) {
-      setError(err?.message || "Échec de l'authentification avec la base de données.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const handleGoogle = async () => {
     setLoading(true);
     setError(null);
     try {
       await loginWithGoogle();
-      toast.success("Authentification Google réussie.");
+      toast.success("Connexion Google réussie !");
       nav("/workspace");
     } catch (err: any) {
       if (err?.code !== "auth/popup-closed-by-user") {
@@ -88,22 +61,8 @@ export default function LoginPage() {
     }
   };
 
-  const handleGuestDemo = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      await loginAsGuest();
-      toast.success("Session Invité Pro provisionnée en base de données.");
-      nav("/workspace");
-    } catch (err: any) {
-      setError("Impossible d'initialiser la session démo.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
   return (
-    <div className="relative flex min-h-dvh flex-col justify-between bg-[#0A0A0F] text-slate-100">
+    <div className="relative flex min-h-dvh flex-col justify-between bg-[#0A0A0F] text-slate-100 font-sans">
       <Toaster richColors />
 
       {/* Background glow effects */}
@@ -111,181 +70,91 @@ export default function LoginPage() {
         aria-hidden="true"
         className="pointer-events-none absolute inset-x-0 top-0 h-[500px]"
         style={{
-          background: "radial-gradient(ellipse 70% 80% at 50% 0%, rgba(139,92,246,0.18), transparent 70%)",
+          background: "radial-gradient(ellipse 70% 80% at 50% 0%, rgba(139,92,246,0.22), transparent 70%)",
         }}
       />
 
-      {/* Top navigation */}
+      {/* Top navigation - discreet back button without bubble */}
       <header className="relative z-10 flex items-center justify-between border-b border-white/6 px-6 py-4">
         <button
           type="button"
           onClick={() => nav("/")}
-          className="inline-flex items-center gap-2 rounded-full border border-white/10 px-3.5 py-1.5 text-[13px] text-slate-300 transition-colors hover:border-violet-400/40 hover:text-white"
+          className="p-1.5 text-slate-400 hover:text-white transition-colors"
+          title="Retour à l'accueil"
+          aria-label="Retour"
         >
-          <ArrowLeft className="size-4" /> Studio
+          <ArrowLeft className="size-5" />
         </button>
 
-        <span className="font-heading text-[16px] font-semibold text-white">
-          LevelUp<span className="text-violet-400">.Studio</span>
-        </span>
+        <div className="flex items-center gap-2">
+          <img src="/favicon.svg" alt="LevelUp" className="size-5 shrink-0" />
+          <span className="font-heading text-[16px] font-semibold text-white">
+            LevelUp<span className="text-violet-400">.Studio</span>
+          </span>
+        </div>
       </header>
 
-      {/* Main card */}
-      <main className="relative z-10 mx-auto my-auto w-full max-w-lg px-4 py-8">
-        <div className="overflow-hidden rounded-3xl border border-white/10 bg-[#12111E] p-8 shadow-[0_20px_80px_-20px_rgba(139,92,246,0.3)]">
-          <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.2em] text-violet-400">
-            <Sparkles className="size-4" /> Espace Connexion
+      {/* Main card - dedicated Google sign-in */}
+      <main className="relative z-10 mx-auto my-auto w-full max-w-md px-4 py-8">
+        <div className="overflow-hidden rounded-3xl border border-white/10 bg-[#12111E] p-8 sm:p-10 shadow-[0_20px_80px_-20px_rgba(139,92,246,0.35)] text-center">
+          <div className="mx-auto mb-4 grid size-12 place-items-center rounded-2xl bg-gradient-to-br from-violet-500 to-indigo-600 shadow-md shadow-violet-500/20">
+            <Sparkles className="size-6 text-white" />
           </div>
-          <h1 className="mt-3 font-heading text-2xl font-bold tracking-tight text-white sm:text-3xl">
-            Accédez à vos Projets Web
+
+          <h1 className="font-heading text-2xl font-bold tracking-tight text-white sm:text-3xl">
+            Connexion au Studio
           </h1>
-          <p className="mt-2 text-sm text-slate-400">
-            Retrouvez tous vos sites, modifications et maquettes sauvegardés sur votre compte.
+          <p className="mt-2 text-sm text-slate-400 leading-relaxed">
+            Synchronisez vos projets, exportez vos codes sources et retrouvez vos sites créés.
           </p>
 
-          {/* Navigation Tabs */}
-          <div className="mt-6 flex rounded-xl border border-white/10 bg-white/[0.03] p-1">
-            <button
-              type="button"
-              onClick={() => { setTab("login"); setError(null); }}
-              className={`flex-1 rounded-lg py-2 text-xs font-semibold transition-all ${
-                tab === "login" ? "bg-violet-600 text-white shadow-md" : "text-slate-400 hover:text-white"
-              }`}
-            >
-              Connexion
-            </button>
-            <button
-              type="button"
-              onClick={() => { setTab("register"); setError(null); }}
-              className={`flex-1 rounded-lg py-2 text-xs font-semibold transition-all ${
-                tab === "register" ? "bg-violet-600 text-white shadow-md" : "text-slate-400 hover:text-white"
-              }`}
-            >
-              Créer un Compte
-            </button>
-            <button
-              type="button"
-              onClick={() => { setTab("demo"); setError(null); }}
-              className={`flex-1 rounded-lg py-2 text-xs font-semibold transition-all ${
-                tab === "demo" ? "bg-violet-600 text-white shadow-md" : "text-slate-400 hover:text-white"
-              }`}
-            >
-              Accès Démo
-            </button>
-          </div>
-
           {error && (
-            <div className="mt-4 rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-xs text-red-300">
+            <div className="mt-5 rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-xs text-red-200">
               {error}
             </div>
           )}
 
-          {tab === "demo" ? (
-            <div className="mt-6 space-y-4">
-              <div className="rounded-2xl border border-violet-500/20 bg-violet-950/20 p-4 text-xs text-violet-200">
-                <p className="font-semibold text-violet-300">Session Démo Immédiate</p>
-                <p className="mt-1 leading-relaxed text-slate-300">
-                  Initialise un profil architecte provisoire directement enregistré dans la base de données avec 20 crédits quotidiens de génération.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={handleGuestDemo}
-                disabled={loading}
-                className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 py-3.5 text-sm font-semibold text-white shadow-lg transition-transform hover:opacity-95 active:scale-[0.98] disabled:opacity-60"
-              >
-                {loading ? <Loader2 className="size-4 animate-spin" /> : <Zap className="size-4" />}
-                Démarrer la Session Immédiate
-              </button>
-            </div>
-          ) : (
-            <form onSubmit={handleEmailSubmit} className="mt-6 space-y-4">
-              {tab === "register" && (
-                <div>
-                  <label className="block text-xs font-medium text-slate-300">Votre Nom ou Agence</label>
-                  <div className="relative mt-1">
-                    <User className="absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-slate-500" />
-                    <input
-                      type="text"
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                      placeholder="Ex: Studio Nova Architecture"
-                      className="w-full rounded-xl border border-white/10 bg-white/[0.04] py-2.5 pl-10 pr-4 text-sm text-white placeholder-slate-500 outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-500"
-                    />
-                  </div>
-                </div>
-              )}
-
-              <div>
-                <label className="block text-xs font-medium text-slate-300">Adresse Email Professionnelle</label>
-                <div className="relative mt-1">
-                  <Mail className="absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-slate-500" />
-                  <input
-                    type="email"
-                    required
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="contact@votre-entreprise.com"
-                    className="w-full rounded-xl border border-white/10 bg-white/[0.04] py-2.5 pl-10 pr-4 text-sm text-white placeholder-slate-500 outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-500"
+          <div className="mt-8 flex flex-col gap-4">
+            <button
+              type="button"
+              disabled={loading}
+              onClick={handleGoogle}
+              className="group relative flex w-full items-center justify-center gap-3 rounded-2xl border border-white/15 bg-white px-5 py-3.5 text-sm font-semibold text-slate-900 shadow-xl transition-all duration-200 hover:bg-slate-100 hover:shadow-violet-500/20 active:scale-[0.98] disabled:opacity-50"
+            >
+              {loading ? (
+                <Loader2 className="size-5 animate-spin text-slate-700" />
+              ) : (
+                <svg className="size-5" viewBox="0 0 24 24">
+                  <path
+                    fill="#4285F4"
+                    d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.8-2.4 3.65v3.03h3.88c2.27-2.09 3.665-5.17 3.665-9.12z"
                   />
-                </div>
-              </div>
-
-              <button
-                type="submit"
-                disabled={loading}
-                className="flex w-full items-center justify-center gap-2 rounded-xl bg-violet-600 py-3 text-sm font-semibold text-white shadow-lg transition-all hover:bg-violet-500 active:scale-[0.98] disabled:opacity-60"
-              >
-                {loading ? (
-                  <Loader2 className="size-4 animate-spin" />
-                ) : (
-                  <KeyRound className="size-4" />
-                )}
-                {tab === "login" ? "Se connecter" : "Créer mon compte"}
-              </button>
-            </form>
-          )}
-
-          {/* Divider */}
-          <div className="my-6 flex items-center gap-3">
-            <div className="h-px flex-1 bg-white/10" />
-            <span className="text-[11px] uppercase tracking-wider text-slate-500">Ou via SSO</span>
-            <div className="h-px flex-1 bg-white/10" />
+                  <path
+                    fill="#34A853"
+                    d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.03c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.25v3.13C3.26 21.36 7.33 24 12 24z"
+                  />
+                  <path
+                    fill="#FBBC05"
+                    d="M5.28 14.29c-.25-.72-.38-1.49-.38-2.29s.13-1.57.38-2.29V6.58H1.25C.45 8.18 0 10.03 0 12s.45 3.82 1.25 5.42l4.03-3.13z"
+                  />
+                  <path
+                    fill="#EA4335"
+                    d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.33 0 3.26 2.64 1.25 6.58l4.03 3.13c.95-2.83 3.6-4.96 6.72-4.96z"
+                  />
+                </svg>
+              )}
+              <span>{loading ? "Authentification en cours..." : "Continuer avec Google"}</span>
+            </button>
           </div>
 
-          {/* Google SSO */}
-          <button
-            type="button"
-            onClick={handleGoogle}
-            disabled={loading}
-            className="flex w-full items-center justify-center gap-3 rounded-xl border border-white/10 bg-white/[0.05] py-2.5 text-sm font-semibold text-white transition-colors hover:bg-white/10 active:scale-[0.98] disabled:opacity-60"
-          >
-            <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true">
-              <path
-                fill="#EA4335"
-                d="M24 9.5c3.5 0 6.6 1.2 9 3.2l6.7-6.7C35.6 2.5 30.2 0 24 0 14.6 0 6.4 5.4 2.5 13.3l7.8 6c1.9-5.5 7.1-9.8 13.7-9.8z"
-              />
-              <path
-                fill="#4285F4"
-                d="M46.9 24.5c0-1.6-.1-3.2-.4-4.8H24v9.1h12.9c-.6 3.1-2.3 5.7-4.9 7.5l7.6 5.9c4.4-4.1 6.9-10.2 6.9-17.7z"
-              />
-              <path
-                fill="#FBBC05"
-                d="M10.3 28.7c-.5-1.5-.8-3-.8-4.7s.3-3.2.8-4.7l-7.8-6C.9 16.5 0 20.1 0 24s.9 7.5 2.5 10.7l7.8-6z"
-              />
-              <path
-                fill="#34A853"
-                d="M24 48c6.5 0 12-2.1 16-5.8l-7.6-5.9c-2.2 1.5-5 2.4-8.4 2.4-6.6 0-11.8-4.3-13.7-9.8l-7.8 6C6.4 42.6 14.6 48 24 48z"
-              />
-            </svg>
-            Continuer avec Google Workspace
-          </button>
+          <p className="mt-6 text-[12px] text-slate-500 leading-relaxed">
+            Vos projets restent sécurisés et associés à votre identifiant Google. Aucune clé sensible n'est requise.
+          </p>
         </div>
       </main>
 
-      {/* Footer */}
       <footer className="relative z-10 border-t border-white/6 py-4 text-center text-xs text-slate-500">
-        LevelUp Studio • AI Website Architect
+        LevelUp Studio — Tous droits réservés.
       </footer>
     </div>
   );

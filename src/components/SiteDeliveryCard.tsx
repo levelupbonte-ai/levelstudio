@@ -98,7 +98,11 @@ export function PreviewFrame({
       }
       setCopied(true);
       setTimeout(() => setCopied(false), 2500);
-      toast.success(`Link copied, valid until ${new Date(link.expires_at).toLocaleDateString()}`);
+      toast.success(
+        link.expires_at
+          ? `Link copied, valid until ${new Date(link.expires_at).toLocaleDateString()}`
+          : "Link copied to clipboard"
+      );
     } catch {
       toast.error("Could not create the share link");
     }

@@ -116,18 +116,21 @@ export async function loginWithGoogle(): Promise<User> {
     let name: string | undefined;
     let picture: string | undefined;
 
-    try {
-      const result = await signInWithPopup(auth, googleProvider);
-      const fbUser = result?.user;
-      if (fbUser) {
-        email = fbUser.email || undefined;
-        name = fbUser.displayName || undefined;
-        picture = fbUser.photoURL || undefined;
+    const apiKey = import.meta.env.VITE_FIREBASE_API_KEY;
+    const hasValidFirebase = Boolean(apiKey && !apiKey.includes("PLACEHOLDER") && apiKey.length > 20);
+
+    if (hasValidFirebase) {
+      try {
+        const result = await signInWithPopup(auth, googleProvider);
+        const fbUser = result?.user;
+        if (fbUser) {
+          email = fbUser.email || undefined;
+          name = fbUser.displayName || undefined;
+          picture = fbUser.photoURL || undefined;
+        }
+      } catch (popupErr: any) {
+        console.warn("Firebase popup not available or framed, using database session auth");
       }
-    } catch (popupErr: any) {
-      console.warn("Firebase popup not available or framed, using seamless database session auth");
-      email = "architecte@levelstudio.app";
-      name = "Architecte Senior Studio";
     }
 
     const res = await apiPost<{ user: User; migrated?: number }>("/auth/session", {

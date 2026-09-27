@@ -36,7 +36,7 @@ const STAGE_FOCUS = [
 const activeJobs = new Map<string, { abort: () => void }>();
 
 function getOwnerId(req: Request, res?: Response): string | null {
-  const anon = req.cookies[ANON_COOKIE];
+  const anon = req.cookies?.[ANON_COOKIE];
   if (res && !anon) {
     return ensureAnonCookie(req, res);
   }
@@ -72,7 +72,7 @@ architectRouter.get("/quota", (_req: Request, res: Response) => {
 // Templates list
 architectRouter.get("/templates", async (req: Request, res: Response) => {
   const user = await getCurrentUser(req);
-  const ownerId = user?.user_id || req.cookies[ANON_COOKIE];
+  const ownerId = user?.user_id || req.cookies?.[ANON_COOKIE];
 
   const service = req.query.service as string | undefined;
   const q = (req.query.q as string | undefined)?.toLowerCase().trim();
@@ -174,7 +174,7 @@ architectRouter.post(
 // Delete imported template
 architectRouter.delete("/templates/:template_id", async (req: Request, res: Response) => {
   const user = await getCurrentUser(req);
-  const ownerId = user?.user_id || req.cookies[ANON_COOKIE];
+  const ownerId = user?.user_id || req.cookies?.[ANON_COOKIE];
   const template = db.templates.get(req.params.template_id);
 
   if (!template || template.kind !== "import" || template.owner_id !== ownerId) {
@@ -189,7 +189,7 @@ architectRouter.delete("/templates/:template_id", async (req: Request, res: Resp
 // Projects list
 architectRouter.get("/projects", async (req: Request, res: Response) => {
   const user = await getCurrentUser(req);
-  const ownerId = user?.user_id || req.cookies[ANON_COOKIE];
+  const ownerId = user?.user_id || req.cookies?.[ANON_COOKIE];
 
   const list = Array.from(db.projects.values())
     .filter((p) => p.user_id === ownerId || p.user_id === "global" || !p.user_id)
@@ -208,7 +208,7 @@ architectRouter.get("/projects", async (req: Request, res: Response) => {
 // Get project
 architectRouter.get("/projects/:project_id", async (req: Request, res: Response) => {
   const user = await getCurrentUser(req);
-  const ownerId = user?.user_id || req.cookies[ANON_COOKIE];
+  const ownerId = user?.user_id || req.cookies?.[ANON_COOKIE];
   const project = db.projects.get(req.params.project_id);
 
   if (!project || (ownerId && project.user_id && project.user_id !== ownerId && project.user_id !== "global")) {
@@ -227,7 +227,7 @@ architectRouter.get("/projects/:project_id", async (req: Request, res: Response)
 // Delete project
 architectRouter.delete("/projects/:project_id", async (req: Request, res: Response) => {
   const user = await getCurrentUser(req);
-  const ownerId = user?.user_id || req.cookies[ANON_COOKIE];
+  const ownerId = user?.user_id || req.cookies?.[ANON_COOKIE];
   const project = db.projects.get(req.params.project_id);
 
   if (!project || (ownerId && project.user_id && project.user_id !== ownerId)) {

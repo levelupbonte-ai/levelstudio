@@ -12,6 +12,7 @@ import QuestionWizard from "@/components/QuestionWizard";
 import ReminderBanner from "@/components/ReminderBanner";
 import ServiceRail, { type Service } from "@/components/ServiceRail";
 import SiteDeliveryCard, { PreviewFrame } from "@/components/SiteDeliveryCard";
+import InteractiveCanvas from "@/components/InteractiveCanvas";
 import TemplateGallery from "@/components/TemplateGallery";
 import { ApiError, apiDelete, apiGet, apiPost } from "@/lib/api";
 import { logout, useAuth } from "@/lib/auth";
@@ -247,10 +248,11 @@ export default function HomePage() {
             <button
               type="button"
               onClick={startNew}
-              className="font-heading text-[16px] font-bold tracking-tight text-white transition-opacity duration-200 hover:opacity-85"
+              className="flex items-center gap-2 font-heading text-[16px] font-bold tracking-tight text-white transition-opacity duration-200 hover:opacity-85"
               data-testid="brand-home-button"
             >
-              LevelUp<span className="text-violet-400">.Studio</span>
+              <img src="/favicon.svg" alt="LevelUp" className="size-5 shrink-0" />
+              <span>LevelUp<span className="text-violet-400">.Studio</span></span>
             </button>
 
             {project && (
@@ -507,24 +509,22 @@ export default function HomePage() {
 
             {/* Desktop Live Canvas */}
             {canvasVisible && project && (
-              <div className="hidden flex-1 flex-col overflow-hidden bg-black lg:flex p-3">
-                {generating || !lastSite?.html ? (
-                  <BuildProgress
-                    step={project.progress_step ?? 0}
-                    pct={project.progress_pct ?? 1}
-                    focus={project.progress_focus}
-                    onStop={() => stop.mutate(project.id)}
-                    mode="desktop"
-                  />
-                ) : (
-                  <PreviewFrame
-                    html={lastSite.html}
-                    name={lastSite.site_name ?? project.title ?? "Site"}
-                    projectId={project.id}
-                    messageId={lastSite.id}
-                    onRequestChange={() => requestChange()}
-                  />
-                )}
+              <div className="hidden flex-1 flex-col overflow-hidden bg-[#0A0A0F] lg:flex p-3">
+                <InteractiveCanvas
+                  project={project}
+                  html={lastSite?.html || project.html || null}
+                  title={project.title || "Interactive Canvas - My Sites & Shortcuts"}
+                  isGenerating={generating}
+                  progressStep={project.progress_step ?? 0}
+                  progressPct={project.progress_pct ?? 1}
+                  progressStatus={project.progress}
+                  onTitleChange={(newTitle) => {
+                    project.title = newTitle;
+                    qc.setQueryData(["project", project.id], { ...project });
+                  }}
+                  onClose={() => setActiveId(null)}
+                  onRequestChange={() => requestChange()}
+                />
               </div>
             )}
           </div>
@@ -533,31 +533,18 @@ export default function HomePage() {
 
       {/* Mobile Fullscreen Preview Modal */}
       {fullscreenSite && fullscreenSite.html && project && (
-        <div className="fixed inset-0 z-50 flex flex-col bg-black">
-          <header className="flex items-center justify-between border-b border-white/10 px-4 py-3">
-            <span className="text-xs font-semibold text-white">Aperçu mobile du site compilé</span>
-            <button
-              type="button"
-              onClick={() => setMobilePreview(null)}
-              className="rounded-full p-1 text-slate-400 hover:text-white"
-            >
-              <X className="size-5" />
-            </button>
-          </header>
-          <div className="flex-1">
-            <PreviewFrame
-              html={fullscreenSite.html}
-              name={fullscreenSite.site_name ?? project.title ?? "Site"}
-              projectId={project.id}
-              messageId={fullscreenSite.id}
-              onClose={() => setMobilePreview(null)}
-              onRequestChange={() => {
-                setMobilePreview(null);
-                requestChange();
-              }}
-              fullscreen
-            />
-          </div>
+        <div className="fixed inset-0 z-50 flex flex-col bg-black p-2 sm:p-4">
+          <InteractiveCanvas
+            project={project}
+            html={fullscreenSite.html}
+            title={fullscreenSite.site_name ?? project.title ?? "Interactive Canvas"}
+            isGenerating={false}
+            onClose={() => setMobilePreview(null)}
+            onRequestChange={() => {
+              setMobilePreview(null);
+              requestChange();
+            }}
+          />
         </div>
       )}
     </div>

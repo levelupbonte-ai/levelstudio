@@ -20,6 +20,7 @@ export default function App() {
       <Route path="/" element={<HomePage />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/templates" element={<TemplatesPage />} />
+      <Route path="/templates/:templateId" element={<TemplatesPage />} />
       <Route path="/workspace" element={<WorkspacePage />} />
       <Route path="/projects" element={<ProjectsPage />} />
       <Route path="/preview/:projectId" element={<PreviewPage />} />
