@@ -241,7 +241,7 @@ export default function Composer({
               <PopoverTrigger
                 disabled={disabled}
                 aria-label="Add an image or a file"
-                className="grid size-9 place-items-center rounded-full border border-white/10 bg-white/[0.02] text-slate-300 transition-[background-color,border-color,color] duration-200 hover:border-violet-400/50 hover:bg-violet-500/10 hover:text-white disabled:opacity-40"
+                className="grid size-8 place-items-center rounded-full text-slate-400 transition-[color] duration-200 hover:text-white disabled:opacity-40"
                 data-testid="attach-file-button"
               >
                 <Plus className="size-[18px]" />

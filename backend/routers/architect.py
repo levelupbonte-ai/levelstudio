@@ -1,4 +1,4 @@
-"""LevelUp Studio architect routes — chat, projects, quota, templates, share."""
+"""LevelUp Studio architect routes — chat, projects, quota, templates, share, import."""
 
 import asyncio
 import logging
@@ -7,12 +7,13 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Set
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request, Response, UploadFile, File
 from fastapi.responses import HTMLResponse
 
 from lib.architect_brain import run_architect, quick_analysis
 from lib.db import db
 from lib.html_post import harden_images
+from lib.html_sanitize import sanitize_import, ImportError as SanitizeError
 from lib.templates import TEMPLATES
 from models.architect import (
     ChatRequest,
@@ -26,7 +27,7 @@ from models.architect import (
     ShareLink,
     Template,
 )
-from routers.auth import require_user, current_user
+from routers.auth import current_user, ANON_COOKIE, ensure_anon_cookie
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -110,14 +111,51 @@ async def _seed_templates_if_needed() -> None:
 
 
 @router.get("/templates", response_model=List[Template])
-async def list_templates(service: Optional[str] = None) -> List[Template]:
+async def list_templates(
+    request: Request,
+    service: Optional[str] = None,
+    q: Optional[str] = None,
+) -> List[Template]:
     await _seed_templates_if_needed()
-    query: Dict[str, Any] = {}
+    user = await current_user(request)
+    owner_id = user.user_id if user else request.cookies.get(ANON_COOKIE)
+
+    # Own imports are always visible; other visitors' imports are hidden.
+    query: Dict[str, Any] = {
+        "$or": [
+            {"kind": {"$in": ["starter", "style"]}},
+            {"kind": "import", "owner_id": owner_id or "__none__"},
+        ]
+    }
     if service and service != "all":
         query["service"] = service
-    docs = await db.templates.find(query, {"_id": 0, "html": 0}).to_list(200)
+        # Compose the $or with service filter — need to re-shape: keep service applied to both branches.
+        query = {
+            "service": service,
+            "$or": [
+                {"kind": {"$in": ["starter", "style"]}},
+                {"kind": "import", "owner_id": owner_id or "__none__"},
+            ],
+        }
+    docs = await db.templates.find(query, {"_id": 0, "html": 0}).to_list(400)
     order = {t["id"]: i for i, t in enumerate(TEMPLATES)}
-    docs.sort(key=lambda d: order.get(d["id"], 999))
+    docs.sort(key=lambda d: (0 if d.get("kind") == "import" else 1, order.get(d["id"], 999)))
+
+    if q:
+        needle = q.strip().lower()
+        def _match(t: Dict[str, Any]) -> bool:
+            hay = " ".join([
+                str(t.get("name", "")),
+                str(t.get("tagline", "")),
+                str(t.get("service", "")),
+                str(t.get("fonts", "")),
+                " ".join(str(x) for x in t.get("palette", [])),
+                " ".join(str(x) for x in t.get("sections", [])),
+                str(t.get("best_for", "")),
+            ]).lower()
+            return needle in hay
+        docs = [d for d in docs if _match(d)]
+
     return [Template(**d) for d in docs]
 
 
@@ -199,10 +237,11 @@ async def get_quota() -> Quota:
 @router.get("/projects", response_model=List[ProjectSummary])
 async def list_projects(request: Request) -> List[ProjectSummary]:
     user = await current_user(request)
-    if not user:
+    owner_id = user.user_id if user else request.cookies.get(ANON_COOKIE)
+    if not owner_id:
         return []
     docs = await db.projects.find(
-        {"user_id": user.user_id}, {"_id": 0}
+        {"user_id": owner_id}, {"_id": 0}
     ).sort("updated_at", -1).to_list(200)
     out: List[ProjectSummary] = []
     for doc in docs:
@@ -220,13 +259,17 @@ async def list_projects(request: Request) -> List[ProjectSummary]:
 @router.get("/projects/{project_id}", response_model=Project)
 async def get_project(project_id: str, request: Request) -> Project:
     user = await current_user(request)
-    return await _load(project_id, user.user_id if user else None)
+    owner_id = user.user_id if user else request.cookies.get(ANON_COOKIE)
+    return await _load(project_id, owner_id)
 
 
 @router.delete("/projects/{project_id}")
 async def delete_project(project_id: str, request: Request) -> Dict[str, bool]:
-    user = await require_user(request)
-    res = await db.projects.delete_one({"id": project_id, "user_id": user.user_id})
+    user = await current_user(request)
+    owner_id = user.user_id if user else request.cookies.get(ANON_COOKIE)
+    if not owner_id:
+        raise HTTPException(status_code=401, detail="Sign in to continue")
+    res = await db.projects.delete_one({"id": project_id, "user_id": owner_id})
     if res.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Project not found")
     return {"ok": True}
@@ -235,7 +278,8 @@ async def delete_project(project_id: str, request: Request) -> Dict[str, bool]:
 @router.get("/projects/{project_id}/html", response_class=HTMLResponse)
 async def get_project_html(project_id: str, request: Request) -> HTMLResponse:
     user = await current_user(request)
-    project = await _load(project_id, user.user_id if user else None)
+    owner_id = user.user_id if user else request.cookies.get(ANON_COOKIE)
+    project = await _load(project_id, owner_id)
     if not project.html:
         raise HTTPException(status_code=404, detail="No site generated yet")
     return HTMLResponse(content=project.html)
@@ -251,8 +295,9 @@ QUOTA_MESSAGE = (
 
 @router.post("/projects/{project_id}/stop", response_model=Project)
 async def stop_build(project_id: str, request: Request) -> Project:
-    user = await require_user(request)
-    project = await _load(project_id, user.user_id)
+    user = await current_user(request)
+    owner_id = user.user_id if user else request.cookies.get(ANON_COOKIE)
+    project = await _load(project_id, owner_id)
     task = _RUNNING.pop(project_id, None)
     if task and not task.done():
         task.cancel()
@@ -271,8 +316,9 @@ async def stop_build(project_id: str, request: Request) -> Project:
 
 @router.post("/projects/{project_id}/share", response_model=ShareLink)
 async def create_share_link(project_id: str, request: Request) -> ShareLink:
-    user = await require_user(request)
-    project = await _load(project_id, user.user_id)
+    user = await current_user(request)
+    owner_id = user.user_id if user else request.cookies.get(ANON_COOKIE)
+    project = await _load(project_id, owner_id)
     if not project.html:
         raise HTTPException(status_code=404, detail="No site generated yet")
 
@@ -435,8 +481,13 @@ def _scan_attachments(atts: List[Any]) -> List[Any]:
 
 
 @router.post("/chat", response_model=ChatResponse)
-async def chat(payload: ChatRequest, request: Request) -> ChatResponse:
-    user = await require_user(request)
+async def chat(payload: ChatRequest, request: Request, response: Response) -> ChatResponse:
+    # Anonymous visitors are welcome — we mint/reuse an anon cookie to own their projects.
+    user = await current_user(request)
+    if user:
+        owner_id = user.user_id
+    else:
+        owner_id = ensure_anon_cookie(request, response)
     if not payload.text.strip() and not payload.attachments:
         raise HTTPException(status_code=422, detail="Message is empty")
 
@@ -445,9 +496,9 @@ async def chat(payload: ChatRequest, request: Request) -> ChatResponse:
         raise HTTPException(status_code=429, detail=QUOTA_MESSAGE)
 
     if payload.project_id:
-        project = await _load(payload.project_id, user.user_id)
+        project = await _load(payload.project_id, owner_id)
     else:
-        project = Project(user_id=user.user_id)
+        project = Project(user_id=owner_id)
     if project.generating:
         raise HTTPException(status_code=409, detail="A build is already running for this project")
     if payload.template_id:
@@ -514,7 +565,7 @@ async def chat(payload: ChatRequest, request: Request) -> ChatResponse:
     project.progress_focus = STAGE_FOCUS[0]
     project.updated_at = datetime.now(timezone.utc)
     if not project.user_id:
-        project.user_id = user.user_id
+        project.user_id = owner_id
     await db.projects.replace_one({"id": project.id}, project.model_dump(), upsert=True)
 
     quota = await _quota(consume=True)
@@ -524,3 +575,58 @@ async def chat(payload: ChatRequest, request: Request) -> ChatResponse:
     task.add_done_callback(_JOBS.discard)
     task.add_done_callback(lambda t, pid=project.id: _RUNNING.pop(pid, None))
     return ChatResponse(project=project, quota=quota)
+
+
+# --- Template import ---------------------------------------------------------
+
+@router.post("/templates/import", response_model=Template)
+async def import_template(
+    request: Request,
+    response: Response,
+    file: UploadFile = File(...),
+    name: Optional[str] = None,
+    service: str = "landing",
+) -> Template:
+    user = await current_user(request)
+    owner_id = user.user_id if user else ensure_anon_cookie(request, response)
+    raw = await file.read()
+    if len(raw) > 500 * 1024:
+        raise HTTPException(status_code=413, detail="Template is over 500 KB")
+    try:
+        html = raw.decode("utf-8", errors="replace")
+        cleaned, notes = sanitize_import(html)
+    except SanitizeError as exc:
+        raise HTTPException(status_code=415, detail=str(exc))
+
+    display_name = (name or (file.filename or "Import").rsplit(".", 1)[0])[:60] or "My import"
+    doc = {
+        "id": f"import-{uuid.uuid4().hex[:12]}",
+        "name": display_name,
+        "tagline": "Imported from an .html file",
+        "best_for": "Your own design",
+        "service": service if service else "landing",
+        "accent": "#8b5cf6",
+        "kind": "import",
+        "palette": ["#0a0a0f", "#8b5cf6", "#ffffff"],
+        "fonts": None,
+        "sections": [],
+        "brief_prompt": None,
+        "owner_id": owner_id,
+        "html": cleaned,
+        "created_at": datetime.now(timezone.utc),
+    }
+    await db.templates.insert_one(doc)
+    logger.info("imported template %s (%d notes) for owner %s", doc["id"], len(notes), owner_id[:12])
+    return Template(**{k: v for k, v in doc.items() if k != "html"})
+
+
+@router.delete("/templates/{template_id}")
+async def delete_template(template_id: str, request: Request) -> Dict[str, bool]:
+    user = await current_user(request)
+    owner_id = user.user_id if user else request.cookies.get(ANON_COOKIE)
+    if not owner_id:
+        raise HTTPException(status_code=401, detail="Sign in to continue")
+    res = await db.templates.delete_one({"id": template_id, "kind": "import", "owner_id": owner_id})
+    if res.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Import not found")
+    return {"ok": True}

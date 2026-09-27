@@ -102,11 +102,13 @@ class Template(BaseModel):
     best_for: str
     service: str
     accent: str
-    kind: Literal["starter", "style"] = "starter"
+    kind: Literal["starter", "style", "import"] = "starter"
     palette: List[str] = Field(default_factory=list)
     fonts: Optional[str] = None
     sections: List[str] = Field(default_factory=list)
     brief_prompt: Optional[str] = None  # style cards: the design brief handed to the architect
+    owner_id: Optional[str] = None  # imported templates carry the visitor/user owning them
+    created_at: Optional[datetime] = None
 
 
 class ChatRequest(BaseModel):

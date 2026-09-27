@@ -1,12 +1,12 @@
-"""Emergent-managed Google Auth routes.
+"""Emergent-managed Google Auth + anonymous-cookie ownership.
 
-Flow:
-1. Frontend redirects to https://auth.emergentagent.com/?redirect=<origin>/dashboard.
-2. User lands back at /dashboard#session_id=<sid>.
-3. AuthCallback POSTs /api/auth/session { session_id } to this router.
-4. We exchange the session_id at Emergent's /session-data endpoint, upsert the user, store the
-   session, and set the httpOnly session_token cookie.
-5. Every protected route reads the cookie via current_user().
+Two identities coexist in the studio:
+- **Anonymous visitors** — a persistent `anon_id` cookie the backend sets on first request. Every
+  project a visitor creates is owned by this id, so refreshes and share links keep working before
+  they sign in. Cookie is per-browser and session-length (30-day cap for share link durability).
+- **Signed-in users** — full accounts backed by Emergent Auth (Google), stored in `users` and
+  `user_sessions`. On login, every project sitting under their `anon_id` is transferred to
+  `user_id` in one atomic pass and the count is returned in the response.
 """
 
 from datetime import datetime, timezone, timedelta
@@ -23,7 +23,9 @@ router = APIRouter()
 
 _EMERGENT_SESSION_URL = "https://demobackend.emergentagent.com/auth/v1/env/oauth/session-data"
 _COOKIE_NAME = "session_token"
+ANON_COOKIE = "anon_id"
 _SESSION_DAYS = 7
+_ANON_DAYS = 30
 
 
 def _naive_utc(dt: datetime) -> datetime:
@@ -47,7 +49,6 @@ async def _resolve_user_from_token(token: str) -> Optional[User]:
 
 
 async def current_user(request: Request) -> Optional[User]:
-    """Return the authenticated user or None. Never raises; auth-gated routes check the return."""
     token = request.cookies.get(_COOKIE_NAME)
     if not token:
         auth = request.headers.get("authorization", "")
@@ -65,9 +66,41 @@ async def require_user(request: Request) -> User:
     return user
 
 
+def _mint_anon_id() -> str:
+    return f"anon_{uuid.uuid4().hex[:16]}"
+
+
+def ensure_anon_cookie(request: Request, response: Response) -> str:
+    """Return the visitor's anon_id, setting the cookie on the response if it was missing."""
+    anon = request.cookies.get(ANON_COOKIE)
+    if anon and anon.startswith("anon_"):
+        return anon
+    anon = _mint_anon_id()
+    response.set_cookie(
+        ANON_COOKIE, anon,
+        max_age=_ANON_DAYS * 24 * 3600,
+        httponly=True, secure=True, samesite="none", path="/",
+    )
+    return anon
+
+
+async def _migrate_anon_to_user(anon_id: str, user_id: str) -> int:
+    """Move every project owned by anon_id to user_id. Returns the moved count."""
+    if not anon_id or not user_id:
+        return 0
+    projects = await db.projects.update_many(
+        {"user_id": anon_id},
+        {"$set": {"user_id": user_id}},
+    )
+    imports = await db.templates.update_many(
+        {"owner_id": anon_id},
+        {"$set": {"owner_id": user_id}},
+    )
+    return int(projects.modified_count) + int(imports.modified_count)
+
+
 @router.post("/auth/session")
-async def create_session(payload: SessionExchange, response: Response) -> dict:
-    """Exchange an Emergent session_id for a persistent session cookie."""
+async def create_session(payload: SessionExchange, request: Request, response: Response) -> dict:
     async with httpx.AsyncClient(timeout=10) as client:
         r = await client.get(_EMERGENT_SESSION_URL, headers={"X-Session-ID": payload.session_id})
     if r.status_code != 200:
@@ -108,8 +141,13 @@ async def create_session(payload: SessionExchange, response: Response) -> dict:
         max_age=_SESSION_DAYS * 24 * 3600,
         httponly=True, secure=True, samesite="none", path="/",
     )
+
+    # Migrate anonymous projects/imports if the visitor already had an anon cookie.
+    anon_id = request.cookies.get(ANON_COOKIE)
+    migrated = await _migrate_anon_to_user(anon_id, user_id) if anon_id else 0
+
     doc = await db.users.find_one({"user_id": user_id}, {"_id": 0})
-    return {"user": User(**doc).model_dump()}
+    return {"user": User(**doc).model_dump(), "migrated": migrated}
 
 
 @router.get("/auth/me")

@@ -5,6 +5,10 @@ import { Loader2 } from "lucide-react";
 import { apiPost } from "@/lib/api";
 import { queryClient } from "@/lib/queryClient";
 
+interface SessionResponse {
+  migrated?: number;
+}
+
 export default function AuthCallback() {
   const [error, setError] = useState<string | null>(null);
   const done = useRef(false);
@@ -19,8 +23,16 @@ export default function AuthCallback() {
       window.location.replace("/");
       return;
     }
-    apiPost("/auth/session", { session_id: sessionId })
-      .then(() => {
+    apiPost<SessionResponse>("/auth/session", { session_id: sessionId })
+      .then((res) => {
+        // Persist the migrated count so Home can surface a toast after the redirect completes.
+        try {
+          if (res.migrated && res.migrated > 0) {
+            window.sessionStorage.setItem("levelup_migrated", String(res.migrated));
+          }
+        } catch {
+          // ignore storage failures
+        }
         queryClient.clear();
         window.history.replaceState(null, "", "/");
         window.location.replace("/");

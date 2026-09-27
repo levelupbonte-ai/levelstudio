@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
-import { Loader2, LogOut, Sparkles, X } from "lucide-react";
+import { FolderKanban, Loader2, LogOut, X } from "lucide-react";
 import { toast } from "sonner";
 import { Toaster } from "@/components/ui/sonner";
 import BuildProgress from "@/components/BuildProgress";
@@ -9,6 +9,7 @@ import Composer, { type Chip } from "@/components/Composer";
 import LoginGate from "@/components/LoginGate";
 import Markdown from "@/components/Markdown";
 import QuestionWizard from "@/components/QuestionWizard";
+import ReminderBanner from "@/components/ReminderBanner";
 import ServiceRail, { type Service } from "@/components/ServiceRail";
 import SiteDeliveryCard, { PreviewFrame } from "@/components/SiteDeliveryCard";
 import TemplateGallery from "@/components/TemplateGallery";
@@ -69,6 +70,23 @@ export default function Home() {
         setTemplate(t);
         window.sessionStorage.removeItem("selected_template");
       }
+      const openId = window.sessionStorage.getItem("open_project");
+      if (openId) {
+        setActiveId(openId);
+        window.sessionStorage.removeItem("open_project");
+      }
+      const migrated = window.sessionStorage.getItem("levelup_migrated");
+      if (migrated) {
+        const n = parseInt(migrated, 10);
+        if (n > 0) {
+          toast.success(
+            n === 1
+              ? "Welcome back — 1 project moved to your account."
+              : `Welcome back — ${n} projects moved to your account.`,
+          );
+        }
+        window.sessionStorage.removeItem("levelup_migrated");
+      }
     } catch {
       // ignore
     }
@@ -79,7 +97,6 @@ export default function Home() {
   const projectsQuery = useQuery({
     queryKey: ["projects"],
     queryFn: () => apiGet<ProjectSummary[]>("/projects"),
-    enabled: Boolean(user),
   });
 
   const projectQuery = useQuery({
@@ -172,15 +189,7 @@ export default function Home() {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages.length, busy, project?.progress_step, openQuestions]);
 
-  const requireAuth = (reason?: string): boolean => {
-    if (user) return true;
-    setLoginReason(reason);
-    setLoginOpen(true);
-    return false;
-  };
-
   const send = (text: string, attachments: Attachment[]) => {
-    if (!requireAuth()) return;
     if (outOfQuota) {
       setQuotaNotice(
         "We have reached the studio's build budget for today. Your projects stay saved in your workspace, so you can keep reviewing every preview and share link. Come back tomorrow, or contact LevelUp Studio to turn one of them into your real website right away.",
@@ -251,14 +260,22 @@ export default function Home() {
           </div>
 
           <div className="flex shrink-0 items-center gap-2">
-            {user && activeId && (
+            <button
+              type="button"
+              onClick={() => nav("/workspace")}
+              className="inline-flex items-center gap-1.5 rounded-full border border-white/10 px-3 py-1.5 text-[12.5px] text-slate-300 transition-colors duration-200 hover:border-violet-400/40 hover:text-white"
+              data-testid="header-workspace-link"
+            >
+              <FolderKanban className="size-3.5" /> Workspace
+            </button>
+            {activeId && (
               <button
                 type="button"
                 onClick={startNew}
                 className="inline-flex items-center gap-1.5 rounded-full border border-white/10 px-3 py-1.5 text-[12.5px] text-slate-300 transition-colors duration-200 hover:border-violet-400/40 hover:text-white"
                 data-testid="header-new-project-button"
               >
-                <Sparkles className="size-3.5" /> New
+                + New
               </button>
             )}
             {authLoading ? null : user ? (
@@ -318,6 +335,8 @@ export default function Home() {
           </div>
         </header>
 
+        {!authLoading && !user && <ReminderBanner />}
+
         {!activeId ? (
           // ------- Hero + composer + services + gallery -------
           <div
@@ -333,12 +352,8 @@ export default function Home() {
               }}
             />
             <div className="relative mx-auto flex w-full max-w-[820px] flex-col items-center">
-              <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.02] px-3 py-1 text-[10.5px] font-medium uppercase tracking-[0.22em] text-violet-200">
-                <Sparkles className="size-3" />
-                Senior web architect
-              </span>
               <h1
-                className="mt-5 text-center font-heading text-[30px] font-semibold leading-[1.1] tracking-tight text-white sm:text-[46px]"
+                className="mt-2 text-center font-heading text-[30px] font-semibold leading-[1.1] tracking-tight text-white sm:text-[46px]"
                 data-testid="hero-title"
               >
                 What are we building today?

@@ -38,6 +38,7 @@ INDEXES: dict[str, list[IndexModel]] = {
     "templates": [
         IndexModel([("id", ASCENDING)], name="id", unique=True),
         IndexModel([("service", ASCENDING), ("kind", ASCENDING)], name="service_kind"),
+        IndexModel([("owner_id", ASCENDING)], name="owner_id", sparse=True),
     ],
 }
 

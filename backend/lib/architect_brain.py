@@ -9,8 +9,10 @@ from typing import Any, Dict, List, Optional
 
 from emergentintegrations.llm.chat import LlmChat, UserMessage
 
-MODEL_PROVIDER = "gemini"
-MODEL_NAME = "gemini-2.5-flash"
+MODEL_PROVIDER = "anthropic"
+MODEL_NAME = "claude-sonnet-4-5-20250929"
+FALLBACK_PROVIDER = "gemini"
+FALLBACK_NAME = "gemini-2.5-flash"
 
 DESIGN_DNA = [
     "Dark Luxe — obsidian surfaces, gold or violet accents, huge serif display, slow reveals",
@@ -210,68 +212,86 @@ async def run_architect(
     images: List[Dict[str, str]],
     base_template: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
-    chat = LlmChat(
-        api_key=_client_key(),
-        session_id=session_id,
-        system_message=SYSTEM_PROMPT,
-    ).with_model(MODEL_PROVIDER, MODEL_NAME)
-    try:
-        chat = chat.with_params(max_tokens=32000)
-    except Exception:  # pragma: no cover
-        pass
-
     prompt = build_turn_prompt(transcript, current_html, base_template)
-    message = UserMessage(text=prompt)
 
-    if images:
+    def _new_chat(provider: str, model: str) -> LlmChat:
+        c = LlmChat(
+            api_key=_client_key(),
+            session_id=session_id,
+            system_message=SYSTEM_PROMPT,
+        ).with_model(provider, model)
+        try:
+            c = c.with_params(max_tokens=32000)
+        except Exception:  # pragma: no cover
+            pass
+        return c
+
+    def _msg() -> UserMessage:
+        if not images:
+            return UserMessage(text=prompt)
         try:
             from emergentintegrations.llm.chat import ImageContent  # type: ignore
 
-            message = UserMessage(
+            return UserMessage(
                 text=prompt,
                 file_contents=[ImageContent(image_base64=img["data"]) for img in images],
             )
         except Exception:
-            message = UserMessage(text=prompt)
+            return UserMessage(text=prompt)
 
     async with _CALL_LOCK:
+        # Primary: Claude Sonnet 4.5. Retry the provider's rate/concurrency errors with backoff.
         last_exc: Optional[Exception] = None
-        for attempt in range(4):
+        for attempt in range(3):
             try:
-                raw = await chat.send_message(message)
+                chat = _new_chat(MODEL_PROVIDER, MODEL_NAME)
+                raw = await chat.send_message(_msg())
                 return _extract_json(raw if isinstance(raw, str) else str(raw))
             except Exception as exc:  # noqa: BLE001
                 last_exc = exc
                 text = str(exc).lower()
                 retryable = "429" in text or "rate" in text or "concurren" in text or "overloaded" in text
-                if not retryable or attempt == 3:
-                    raise
+                if not retryable or attempt == 2:
+                    break
                 await asyncio.sleep(2 * (attempt + 1))
-        raise last_exc if last_exc else RuntimeError("architect call failed")
+        # Fallback: Gemini 2.5 Flash — one shot, no more retries so the visitor is not left waiting.
+        try:
+            chat = _new_chat(FALLBACK_PROVIDER, FALLBACK_NAME)
+            raw = await chat.send_message(_msg())
+            return _extract_json(raw if isinstance(raw, str) else str(raw))
+        except Exception as exc:  # noqa: BLE001
+            raise last_exc or exc
 
 
 async def quick_analysis(user_text: str, style_brief: str = "") -> str:
     """Cheap first-pass analysis: a warm paragraph confirming what the architect understood.
-    Runs on the same LLM but with the analysis system prompt, ~50 words, no JSON."""
+    Runs on Sonnet 4.5 with the analysis system prompt (~50 words, no JSON), Gemini fallback."""
     if not user_text.strip():
         return ""
-    chat = LlmChat(
-        api_key=_client_key(),
-        session_id=f"analysis-{random.randint(0, 10**9)}",
-        system_message=_ANALYSIS_SYSTEM,
-    ).with_model(MODEL_PROVIDER, MODEL_NAME)
-    try:
-        chat = chat.with_params(max_tokens=200)
-    except Exception:
-        pass
     prompt = f"VISITOR MESSAGE:\n{user_text.strip()}"
     if style_brief:
         prompt += f"\n\nCHOSEN STYLE BRIEF:\n{style_brief}"
+    session_id = f"analysis-{random.randint(0, 10**9)}"
+
+    def _chat(provider: str, model: str) -> LlmChat:
+        c = LlmChat(
+            api_key=_client_key(),
+            session_id=session_id,
+            system_message=_ANALYSIS_SYSTEM,
+        ).with_model(provider, model)
+        try:
+            c = c.with_params(max_tokens=220)
+        except Exception:
+            pass
+        return c
+
     async with _CALL_LOCK:
         try:
-            raw = await chat.send_message(UserMessage(text=prompt))
+            raw = await _chat(MODEL_PROVIDER, MODEL_NAME).send_message(UserMessage(text=prompt))
         except Exception:
-            return ""
+            try:
+                raw = await _chat(FALLBACK_PROVIDER, FALLBACK_NAME).send_message(UserMessage(text=prompt))
+            except Exception:
+                return ""
     text = raw if isinstance(raw, str) else str(raw)
-    # Strip fences/JSON just in case the model deviates
     return text.strip().strip("`").strip()

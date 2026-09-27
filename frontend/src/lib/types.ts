@@ -88,11 +88,13 @@ export interface Template {
   best_for: string;
   service: string;
   accent: string;
-  kind: "starter" | "style";
+  kind: "starter" | "style" | "import";
   palette: string[];
   fonts: string | null;
   sections: string[];
   brief_prompt: string | null;
+  owner_id?: string | null;
+  created_at?: string | null;
 }
 
 export interface User {

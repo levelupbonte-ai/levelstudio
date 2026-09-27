@@ -1,6 +1,7 @@
 import { Routes, Route, useLocation } from "react-router-dom";
 import Home from "@/pages/Home";
 import TemplatesAll from "@/pages/TemplatesAll";
+import Workspace from "@/pages/Workspace";
 import AuthCallback from "@/pages/AuthCallback";
 
 // The AuthCallback must intercept #session_id BEFORE the normal routes render.
@@ -11,6 +12,7 @@ export default function App() {
     <Routes>
       <Route path="/" element={<Home />} />
       <Route path="/templates" element={<TemplatesAll />} />
+      <Route path="/workspace" element={<Workspace />} />
     </Routes>
   );
 }
