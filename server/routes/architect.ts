@@ -6,6 +6,7 @@ import { getCurrentUser, ensureAnonCookie, ANON_COOKIE } from "./auth.ts";
 import { hardenImages, sanitizeImport } from "../html-utils.ts";
 import { runArchitect, quickAnalysis } from "../brain.ts";
 import type { TemplateData } from "../templates.ts";
+import { geminiRotator } from "../lib/gemini.ts";
 
 export const architectRouter = Router();
 
@@ -568,3 +569,8 @@ function startBackgroundBuild(project: ProjectDoc, baseTemplate: TemplateData | 
       project.updated_at = new Date().toISOString();
     });
 }
+
+architectRouter.get("/gemini/status", (_req, res) => {
+  res.json(geminiRotator.getStats());
+});
+

@@ -1,7 +1,7 @@
-import { GoogleGenAI } from "@google/genai";
 import type { TemplateData } from "./templates.ts";
 import { ALL_TEMPLATES } from "./templates.ts";
 import { hardenImages } from "./html-utils.ts";
+import { geminiRotator } from "./lib/gemini.ts";
 
 export const DESIGN_DNA = [
   "Dark Luxe — obsidian surfaces, gold or violet accents, huge serif display, slow reveals",
@@ -24,91 +24,7 @@ export const FONT_PAIRS = [
   "Archivo Black + Karla",
 ];
 
-// Key Rotator for multi-key load balancing & rate-limit resilience
-interface KeyEntry {
-  key: string;
-  cooldownUntil: number;
-  totalCalls: number;
-  failures: number;
-}
-
-class GeminiKeyPool {
-  private keys: KeyEntry[] = [];
-  private pointer: number = 0;
-
-  constructor() {
-    this.refreshKeys();
-  }
-
-  refreshKeys(): void {
-    const rawKeys = process.env.GEMINI_API_KEYS || process.env.GEMINI_API_KEY || "";
-    const list = rawKeys
-      .split(/[\n,;]+/)
-      .map((k) => k.trim())
-      .filter((k) => k.length > 5);
-
-    // Merge new keys without losing existing stats
-    for (const key of list) {
-      if (!this.keys.some((entry) => entry.key === key)) {
-        this.keys.push({
-          key,
-          cooldownUntil: 0,
-          totalCalls: 0,
-          failures: 0,
-        });
-      }
-    }
-  }
-
-  getKeyCount(): number {
-    this.refreshKeys();
-    return this.keys.length;
-  }
-
-  getNextKey(): { key: string; markResult: (success: boolean, isRateLimit?: boolean) => void } | null {
-    this.refreshKeys();
-    if (this.keys.length === 0) return null;
-
-    const now = Date.now();
-    // Find next available key not in cooldown
-    for (let i = 0; i < this.keys.length; i++) {
-      const idx = (this.pointer + i) % this.keys.length;
-      const entry = this.keys[idx];
-      if (entry.cooldownUntil <= now) {
-        this.pointer = (idx + 1) % this.keys.length;
-        entry.totalCalls++;
-        return {
-          key: entry.key,
-          markResult: (success: boolean, isRateLimit: boolean = false) => {
-            if (success) {
-              entry.failures = 0;
-            } else {
-              entry.failures++;
-              const penaltyMs = isRateLimit ? 45000 : 10000;
-              entry.cooldownUntil = Date.now() + penaltyMs;
-            }
-          },
-        };
-      }
-    }
-
-    // If all keys are in cooldown, pick the one with earliest cooldown expiration
-    const sorted = [...this.keys].sort((a, b) => a.cooldownUntil - b.cooldownUntil);
-    const best = sorted[0];
-    best.totalCalls++;
-    return {
-      key: best.key,
-      markResult: (success: boolean, isRateLimit: boolean = false) => {
-        if (!success) {
-          best.failures++;
-          best.cooldownUntil = Date.now() + (isRateLimit ? 45000 : 10000);
-        }
-      },
-    };
-  }
-}
-
-export const keyPool = new GeminiKeyPool();
+export const keyPool = geminiRotator;
 
 export const SYSTEM_PROMPT = `You are the SENIOR WEB ARCHITECT of LevelUp Studio — an elite boutique web design agency.
 You design and write world-class, award-winning, production-grade websites.
@@ -192,33 +108,29 @@ export async function quickAnalysis(userText: string, styleBrief: string = ""): 
   const trimmed = userText.trim();
   if (!trimmed) return "";
 
-  const keyCount = keyPool.getKeyCount();
-  const attempts = Math.max(1, Math.min(keyCount, 3));
-
-  for (let i = 0; i < attempts; i++) {
-    const keyHandle = keyPool.getNextKey();
-    if (!keyHandle) break;
-
-    try {
-      const ai = new GoogleGenAI({ apiKey: keyHandle.key });
+  try {
+    const text = await geminiRotator.executeWithRotation(async (ai) => {
       const prompt = `VISITOR MESSAGE:\n${trimmed}${styleBrief ? `\n\nCHOSEN STYLE BRIEF:\n${styleBrief}` : ""}`;
       const response = await ai.models.generateContent({
-        model: "gemini-2.5-flash",
+        model: "gemini-3.8-flash",
         contents: prompt,
         config: {
           systemInstruction: ANALYSIS_SYSTEM,
           maxOutputTokens: 250,
         },
       });
-      const text = response.text?.trim();
-      if (text) {
-        keyHandle.markResult(true);
-        return text.replace(/^```|```$/g, "").trim();
+      const generated = response.text?.trim();
+      if (generated) {
+        return generated.replace(/^```|```$/g, "").trim();
       }
-    } catch (err: any) {
-      const isRate = String(err?.message || "").includes("429") || String(err?.status) === "429";
-      keyHandle.markResult(false, isRate);
+      throw new Error("Empty response from Gemini");
+    }, 3);
+
+    if (text) {
+      return text;
     }
+  } catch (err: any) {
+    console.warn("[quickAnalysis] Gemini rotation fallback:", err?.message || err);
   }
 
   // Graceful rule-based fallback
@@ -276,17 +188,11 @@ export async function runArchitect(
   baseTemplate: TemplateData | null,
 ): Promise<ArchitectResult> {
   const prompt = buildTurnPrompt(transcript, currentHtml, baseTemplate);
-  const keyCount = keyPool.getKeyCount();
-  const maxTries = Math.max(1, Math.min(keyCount, 5));
 
-  for (let attempt = 0; attempt < maxTries; attempt++) {
-    const keyHandle = keyPool.getNextKey();
-    if (!keyHandle) break;
-
-    try {
-      const ai = new GoogleGenAI({ apiKey: keyHandle.key });
+  try {
+    const result = await geminiRotator.executeWithRotation(async (ai) => {
       const response = await ai.models.generateContent({
-        model: "gemini-2.5-flash",
+        model: "gemini-3.8-flash",
         contents: prompt,
         config: {
           systemInstruction: SYSTEM_PROMPT,
@@ -297,15 +203,17 @@ export async function runArchitect(
 
       const parsed = extractJson(response.text || "");
       if (parsed && (parsed.kind === "site" || parsed.kind === "questions" || parsed.kind === "refusal")) {
-        keyHandle.markResult(true);
         return parsed as ArchitectResult;
       }
-    } catch (err: any) {
-      const errMsg = String(err?.message || "");
-      const isRate = errMsg.includes("429") || errMsg.includes("RESOURCE_EXHAUSTED");
-      console.warn(`Gemini key attempt ${attempt + 1} failed (rate limit: ${isRate}):`, errMsg.slice(0, 120));
-      keyHandle.markResult(false, isRate);
+
+      throw new Error("Invalid or unparseable JSON received from Gemini");
+    });
+
+    if (result) {
+      return result;
     }
+  } catch (err: any) {
+    console.warn("[Architect] Key rotation exhausted or all keys failed, using high-fidelity fallback:", err?.message || err);
   }
 
   // High-fidelity fallback
