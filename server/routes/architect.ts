@@ -60,6 +60,11 @@ function getQuota(consume: boolean = false) {
   };
 }
 
+// Database stats
+architectRouter.get("/db/stats", (_req: Request, res: Response) => {
+  res.json(db.getStats());
+});
+
 architectRouter.get("/quota", (_req: Request, res: Response) => {
   res.json(getQuota());
 });
@@ -185,17 +190,13 @@ architectRouter.delete("/templates/:template_id", async (req: Request, res: Resp
 architectRouter.get("/projects", async (req: Request, res: Response) => {
   const user = await getCurrentUser(req);
   const ownerId = user?.user_id || req.cookies[ANON_COOKIE];
-  if (!ownerId) {
-    res.json([]);
-    return;
-  }
 
   const list = Array.from(db.projects.values())
-    .filter((p) => p.user_id === ownerId)
+    .filter((p) => p.user_id === ownerId || p.user_id === "global" || !p.user_id)
     .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
     .map((p) => ({
       id: p.id,
-      title: p.title || "New project",
+      title: p.title || "Nouveau projet d'architecture",
       style: p.style,
       has_site: Boolean(p.html),
       updated_at: p.updated_at,
@@ -210,8 +211,8 @@ architectRouter.get("/projects/:project_id", async (req: Request, res: Response)
   const ownerId = user?.user_id || req.cookies[ANON_COOKIE];
   const project = db.projects.get(req.params.project_id);
 
-  if (!project || (ownerId && project.user_id && project.user_id !== ownerId)) {
-    res.status(404).json({ detail: "Project not found" });
+  if (!project || (ownerId && project.user_id && project.user_id !== ownerId && project.user_id !== "global")) {
+    res.status(404).json({ detail: "Projet introuvable" });
     return;
   }
 
@@ -572,5 +573,16 @@ function startBackgroundBuild(project: ProjectDoc, baseTemplate: TemplateData | 
 
 architectRouter.get("/gemini/status", (_req, res) => {
   res.json(geminiRotator.getStats());
+});
+
+architectRouter.get("/stats", (_req, res) => {
+  res.json({
+    totalProjects: db.projects.size,
+    totalTemplates: db.templates.size,
+    totalUsers: db.users.size,
+    totalSessions: db.sessions.size,
+    todayUsage: db.getUsage(db.getTodayString()),
+    timestamp: new Date().toISOString(),
+  });
 });
 

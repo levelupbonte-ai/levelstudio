@@ -1,18 +1,30 @@
 import { Routes, Route, useLocation } from "react-router-dom";
-import Home from "@/pages/Home";
-import TemplatesAll from "@/pages/TemplatesAll";
-import Workspace from "@/pages/Workspace";
-import AuthCallback from "@/pages/AuthCallback";
+import HomePage from "@/pages/home";
+import LoginPage from "@/pages/login";
+import TemplatesPage from "@/pages/templates";
+import WorkspacePage from "@/pages/workspace";
+import ProjectsPage from "@/pages/projects";
+import PreviewPage from "@/pages/preview";
+import AuthCallbackPage from "@/pages/auth-callback";
 
-// The AuthCallback must intercept #session_id BEFORE the normal routes render.
 export default function App() {
   const location = useLocation();
-  if (location.hash?.includes("session_id=")) return <AuthCallback />;
+
+  // The AuthCallback must intercept #session_id BEFORE the normal routes render
+  if (location.hash?.includes("session_id=")) {
+    return <AuthCallbackPage />;
+  }
+
   return (
     <Routes>
-      <Route path="/" element={<Home />} />
-      <Route path="/templates" element={<TemplatesAll />} />
-      <Route path="/workspace" element={<Workspace />} />
+      <Route path="/" element={<HomePage />} />
+      <Route path="/login" element={<LoginPage />} />
+      <Route path="/templates" element={<TemplatesPage />} />
+      <Route path="/workspace" element={<WorkspacePage />} />
+      <Route path="/projects" element={<ProjectsPage />} />
+      <Route path="/preview/:projectId" element={<PreviewPage />} />
+      <Route path="/share/:token" element={<PreviewPage />} />
+      <Route path="/auth/callback" element={<AuthCallbackPage />} />
     </Routes>
   );
 }

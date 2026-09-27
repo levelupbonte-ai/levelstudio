@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
-import { FolderKanban, Loader2, LogOut, X } from "lucide-react";
+import { ArrowRight, Database, FolderKanban, Globe, Layout, Loader2, LogIn, LogOut, Sparkles, Wand2, X } from "lucide-react";
 import { toast } from "sonner";
 import { Toaster } from "@/components/ui/sonner";
 import BuildProgress from "@/components/BuildProgress";
@@ -44,7 +44,7 @@ function useIsMobile() {
   return mobile;
 }
 
-export default function Home() {
+export default function HomePage() {
   const nav = useNavigate();
   const isDesktop = useIsDesktop();
   const isMobile = useIsMobile();
@@ -57,7 +57,7 @@ export default function Home() {
   const [quotaNotice, setQuotaNotice] = useState<string | null>(null);
   const [loginOpen, setLoginOpen] = useState(false);
   const [loginReason, setLoginReason] = useState<string | undefined>(undefined);
-  const [mobilePreview, setMobilePreview] = useState<string | null>(null); // messageId of site to fullscreen on mobile
+  const [mobilePreview, setMobilePreview] = useState<string | null>(null);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -81,8 +81,8 @@ export default function Home() {
         if (n > 0) {
           toast.success(
             n === 1
-              ? "Welcome back — 1 project moved to your account."
-              : `Welcome back — ${n} projects moved to your account.`,
+              ? "Bienvenue — 1 projet synchronisé avec votre compte."
+              : `Bienvenue — ${n} projets synchronisés avec votre compte.`,
           );
         }
         window.sessionStorage.removeItem("levelup_migrated");
@@ -97,13 +97,14 @@ export default function Home() {
   const projectsQuery = useQuery({
     queryKey: ["projects"],
     queryFn: () => apiGet<ProjectSummary[]>("/projects"),
+    refetchInterval: 10000,
   });
 
   const projectQuery = useQuery({
     queryKey: ["project", activeId],
     queryFn: () => apiGet<Project>(`/projects/${activeId}`),
     enabled: Boolean(activeId),
-    refetchInterval: (query) => (query.state.data?.generating ? 2000 : false),
+    refetchInterval: (query) => (query.state.data?.generating ? 1500 : false),
   });
 
   const chat = useMutation({
@@ -120,10 +121,11 @@ export default function Home() {
       qc.setQueryData(["project", res.project.id], res.project);
       qc.setQueryData(["quota"], res.quota);
       void qc.invalidateQueries({ queryKey: ["projects"] });
+      void qc.invalidateQueries({ queryKey: ["db-stats"] });
     },
     onError: (err) => {
       if (err instanceof ApiError && err.status === 401) {
-        setLoginReason("Sign in to save this build and share it later.");
+        setLoginReason("Authentifiez-vous pour sauvegarder cette architecture dans votre compte.");
         setLoginOpen(true);
         return;
       }
@@ -132,13 +134,13 @@ export default function Home() {
           err.body && typeof err.body === "object"
             ? String((err.body as { detail?: unknown }).detail ?? "")
             : "";
-        setQuotaNotice(detail || "We have reached the studio's build budget for today.");
+        setQuotaNotice(detail || "Limite quotidienne de compilation atteinte.");
         return;
       }
       const detail =
         err instanceof ApiError && err.body && typeof err.body === "object"
-          ? String((err.body as { detail?: unknown }).detail ?? "Something went wrong")
-          : "Something went wrong";
+          ? String((err.body as { detail?: unknown }).detail ?? "Une erreur est survenue")
+          : "Une erreur est survenue";
       toast.error(detail);
     },
   });
@@ -147,7 +149,7 @@ export default function Home() {
     mutationFn: (id: string) => apiPost<Project>(`/projects/${id}/stop`),
     onSuccess: (project) => {
       qc.setQueryData(["project", project.id], project);
-      toast.success("Build stopped");
+      toast.success("Génération interrompue");
     },
   });
 
@@ -156,7 +158,7 @@ export default function Home() {
     onSuccess: (_d, id) => {
       if (activeId === id) setActiveId(null);
       void qc.invalidateQueries({ queryKey: ["projects"] });
-      toast.success("Project deleted");
+      toast.success("Projet supprimé de la base de données");
     },
   });
 
@@ -180,8 +182,9 @@ export default function Home() {
   useEffect(() => {
     if (!generating && lastMessage?.kind === "site" && delivered.current !== lastMessage.id) {
       delivered.current = lastMessage.id;
-      toast.success("Your site is ready");
+      toast.success("Architecture finalisée avec succès");
       void qc.invalidateQueries({ queryKey: ["projects"] });
+      void qc.invalidateQueries({ queryKey: ["db-stats"] });
     }
   }, [generating, lastMessage, qc]);
 
@@ -192,12 +195,12 @@ export default function Home() {
   const send = (text: string, attachments: Attachment[]) => {
     if (outOfQuota) {
       setQuotaNotice(
-        "We have reached the studio's build budget for today. Your projects stay saved in your workspace, so you can keep reviewing every preview and share link. Come back tomorrow, or contact LevelUp Studio to turn one of them into your real website right away.",
+        "Vous avez atteint le quota quotidien du studio. Vos projets restent sauvegardés dans votre espace de travail.",
       );
       return;
     }
     const brief = picked.length
-      ? `Project type: ${picked.map((p) => p.label).join(", ")}.${text ? `\n${text}` : ""}`
+      ? `Secteur d'activité : ${picked.map((p) => p.label).join(", ")}.${text ? `\n${text}` : ""}`
       : text;
     setQuotaNotice(null);
     chat.mutate({ text: brief, attachments });
@@ -235,7 +238,7 @@ export default function Home() {
       <LoginGate open={loginOpen} onClose={() => setLoginOpen(false)} reason={loginReason} />
 
       <main className="flex min-h-0 min-w-0 flex-1 flex-col">
-        {/* Slim top bar — no sidebar on PC per spec, brand + auth on the right. */}
+        {/* Top Header */}
         <header
           className="flex shrink-0 items-center justify-between gap-3 border-b border-white/6 px-4 py-3 sm:px-6"
           data-testid="app-header"
@@ -244,14 +247,15 @@ export default function Home() {
             <button
               type="button"
               onClick={startNew}
-              className="font-heading text-[16px] font-semibold tracking-tight text-white transition-opacity duration-200 hover:opacity-80"
+              className="font-heading text-[16px] font-bold tracking-tight text-white transition-opacity duration-200 hover:opacity-85"
               data-testid="brand-home-button"
             >
-              LevelUp<span className="text-violet-400">Studio</span>
+              LevelUp<span className="text-violet-400">.Studio</span>
             </button>
+
             {project && (
               <span
-                className="hidden truncate rounded-full border border-white/10 px-3 py-1 text-[12px] text-slate-400 sm:inline-block"
+                className="hidden truncate rounded-full border border-white/10 px-3 py-1 text-[12px] text-slate-300 sm:inline-block"
                 data-testid="header-project-title"
               >
                 {project.title}
@@ -262,12 +266,21 @@ export default function Home() {
           <div className="flex shrink-0 items-center gap-2">
             <button
               type="button"
+              onClick={() => nav("/templates")}
+              className="inline-flex items-center gap-1.5 rounded-full border border-white/10 px-3 py-1.5 text-[12.5px] text-slate-300 transition-colors duration-200 hover:border-violet-400/40 hover:text-white"
+            >
+              Templates
+            </button>
+
+            <button
+              type="button"
               onClick={() => nav("/workspace")}
               className="inline-flex items-center gap-1.5 rounded-full border border-white/10 px-3 py-1.5 text-[12.5px] text-slate-300 transition-colors duration-200 hover:border-violet-400/40 hover:text-white"
               data-testid="header-workspace-link"
             >
-              <FolderKanban className="size-3.5" /> Workspace
+              <FolderKanban className="size-3.5 text-violet-400" /> Workspace
             </button>
+
             {activeId && (
               <button
                 type="button"
@@ -278,25 +291,9 @@ export default function Home() {
                 + New
               </button>
             )}
+
             {authLoading ? null : user ? (
               <div className="flex items-center gap-2">
-                {projectsQuery.data && projectsQuery.data.length > 0 && !activeId && (
-                  <select
-                    className="hidden max-w-[180px] truncate rounded-full border border-white/10 bg-white/[0.02] px-3 py-1.5 text-[12.5px] text-slate-300 sm:inline-block"
-                    value=""
-                    onChange={(e) => {
-                      if (e.target.value) setActiveId(e.target.value);
-                    }}
-                    data-testid="header-projects-dropdown"
-                  >
-                    <option value="">My projects</option>
-                    {projectsQuery.data.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.title}
-                      </option>
-                    ))}
-                  </select>
-                )}
                 {user.picture ? (
                   <img
                     src={user.picture}
@@ -306,7 +303,7 @@ export default function Home() {
                   />
                 ) : (
                   <span
-                    className="grid size-8 place-items-center rounded-full bg-gradient-to-br from-violet-500 to-fuchsia-600 text-[12px] font-semibold text-white"
+                    className="grid size-8 place-items-center rounded-full bg-gradient-to-br from-violet-500 to-indigo-600 text-[12px] font-semibold text-white shadow"
                     data-testid="user-avatar"
                   >
                     {user.name.slice(0, 1).toUpperCase()}
@@ -316,8 +313,9 @@ export default function Home() {
                   type="button"
                   onClick={() => void logout()}
                   aria-label="Sign out"
-                  className="rounded-full p-1.5 text-slate-500 hover:text-slate-200"
+                  className="rounded-full p-1.5 text-slate-400 hover:text-slate-100 transition-colors"
                   data-testid="logout-button"
+                  title="Sign out"
                 >
                   <LogOut className="size-4" />
                 </button>
@@ -325,11 +323,11 @@ export default function Home() {
             ) : (
               <button
                 type="button"
-                onClick={() => setLoginOpen(true)}
-                className="rounded-full bg-white px-4 py-1.5 text-[12.5px] font-semibold text-slate-900 transition-transform duration-200 active:scale-[0.98]"
+                onClick={() => nav("/login")}
+                className="inline-flex items-center gap-1.5 rounded-full bg-violet-600 px-3.5 py-1.5 text-[12.5px] font-semibold text-white shadow transition-all hover:bg-violet-500 active:scale-[0.98]"
                 data-testid="header-signin-button"
               >
-                Sign in
+                <LogIn className="size-3.5" /> Sign in
               </button>
             )}
           </div>
@@ -340,51 +338,62 @@ export default function Home() {
         {!activeId ? (
           // ------- Hero + composer + services + gallery -------
           <div
-            className="no-scrollbar relative flex min-h-0 flex-1 flex-col overflow-y-auto px-4 pb-14 pt-10 sm:px-6"
+            className="no-scrollbar relative flex min-h-0 flex-1 flex-col overflow-y-auto px-4 pb-14 pt-8 sm:px-6"
             data-testid="hero-section"
           >
             <div
               aria-hidden="true"
-              className="pointer-events-none absolute inset-x-0 top-0 h-[420px]"
+              className="pointer-events-none absolute inset-x-0 top-0 h-[480px]"
               style={{
                 background:
-                  "radial-gradient(ellipse 60% 100% at 50% 0%, rgba(124,58,237,0.16), transparent 70%)",
+                  "radial-gradient(ellipse 65% 100% at 50% 0%, rgba(139,92,246,0.18), transparent 70%)",
               }}
             />
-            <div className="relative mx-auto flex w-full max-w-[820px] flex-col items-center">
+            <div className="relative mx-auto flex w-full max-w-[860px] flex-col items-center">
               <h1
-                className="mt-2 text-center font-heading text-[30px] font-semibold leading-[1.1] tracking-tight text-white sm:text-[46px]"
+                className="text-center font-heading text-[32px] font-bold leading-[1.12] tracking-tight text-white sm:text-[48px]"
                 data-testid="hero-title"
               >
                 What are we building today?
               </h1>
-              <p className="mx-auto mt-4 max-w-lg text-center text-[14.5px] leading-relaxed text-slate-400 sm:text-[15.5px]">
-                Tell me about your business. I analyse your brief, ask a few sharp questions, then
-                deliver a complete website you can preview and share.
+
+              <p className="mt-3 max-w-[620px] text-center text-[15px] leading-relaxed text-slate-400 sm:text-[16px]">
+                Describe your business or project. Our senior web architect designs, writes, and builds a complete single-file site with real copy and working interactions.
               </p>
 
-              {quotaNotice && (
+              {template && (
                 <div
-                  className="mt-6 w-full rounded-2xl border border-white/10 bg-[#12121c] p-4"
-                  data-testid="quota-notice"
+                  className="mt-4 inline-flex items-center gap-2 rounded-full border border-violet-400/40 bg-violet-500/10 px-3.5 py-1 text-[12.5px] text-violet-200"
+                  data-testid="hero-selected-template-badge"
                 >
-                  <Markdown text={quotaNotice} />
+                  <Sparkles className="size-3.5 text-violet-400" />
+                  <span>Starting from: <strong className="text-white">{template}</strong></span>
+                  <button
+                    type="button"
+                    onClick={() => setTemplate(null)}
+                    className="ml-1 text-violet-300 hover:text-white"
+                    aria-label="Remove template"
+                  >
+                    <X className="size-3" />
+                  </button>
                 </div>
               )}
 
+              {/* Central Composer */}
               <div className="mt-8 w-full">
                 <Composer
                   onSend={send}
                   busy={busy}
-                  disabled={false}
-                  hero
+                  disabled={outOfQuota}
+                  hero={true}
                   chips={chips}
-                  onRemoveChip={(id) => setPicked((p) => p.filter((s) => s.id !== id))}
+                  onRemoveChip={(id) => setPicked((p) => p.filter((x) => x.id !== id))}
                   focusRef={textareaRef}
                 />
               </div>
 
-              <div className="mt-5 w-full">
+              {/* Service categories */}
+              <div className="mt-8 w-full max-w-full">
                 <ServiceRail
                   selected={picked.map((p) => p.id)}
                   onToggle={toggleService}
@@ -392,6 +401,17 @@ export default function Home() {
                 />
               </div>
 
+              {/* Quota / budget warning */}
+              {quotaNotice && (
+                <div
+                  className="mt-6 w-full rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-center text-xs text-amber-200"
+                  data-testid="quota-notice"
+                >
+                  {quotaNotice}
+                </div>
+              )}
+
+              {/* Templates gallery */}
               <div className="mt-14 w-full">
                 <TemplateGallery
                   selected={template}
@@ -404,73 +424,54 @@ export default function Home() {
             </div>
           </div>
         ) : (
-          // ------- Active project: chat column (+ canvas on desktop) -------
-          <div className="flex min-h-0 flex-1">
-            <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-              <div
-                ref={scrollRef}
-                className="no-scrollbar mx-auto w-full max-w-3xl flex-1 overflow-y-auto px-4 py-6 sm:px-5"
-                data-testid="chat-stream"
-              >
-                {projectQuery.isLoading && (
-                  <div className="flex items-center gap-2 text-sm text-slate-500">
-                    <Loader2 className="size-4 animate-spin" /> Loading project
-                  </div>
-                )}
-
-                {messages.map((m) =>
-                  m.role === "user" ? (
-                    <div
-                      key={m.id}
-                      className="mb-7 flex justify-end"
-                      data-testid={`user-message-${m.id}`}
-                    >
-                      <div className="max-w-[85%] animate-rise-in whitespace-pre-wrap rounded-2xl rounded-br-md bg-white/[0.05] px-4 py-2.5 text-[14px] font-normal leading-relaxed text-slate-300">
-                        {m.text}
-                        {m.attachments.length > 0 && (
-                          <span className="mt-1 block text-[11px] text-slate-500">
-                            {m.attachments.map((a) => a.name).join(", ")}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  ) : (
-                    <div
-                      key={m.id}
-                      className="mb-8"
-                      data-testid={`assistant-message-${m.id}`}
-                    >
-                      {m.kind === "analysis" && (
-                        <div className="mb-2 flex items-center gap-2 text-[11px] uppercase tracking-[0.2em] text-violet-300">
-                          <span className="size-1.5 rounded-full bg-violet-400" />
-                          Understanding your brief
+          // ------- Workspace Split Canvas: Chat / Live preview -------
+          <div className="flex min-h-0 flex-1 overflow-hidden">
+            {/* Chat column */}
+            <div
+              className={`flex flex-col border-r border-white/6 ${
+                canvasVisible ? "w-full lg:w-[480px] xl:w-[540px]" : "w-full max-w-4xl mx-auto"
+              }`}
+            >
+              <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">
+                {messages.map((m) => (
+                  <div key={m.id} className="space-y-3">
+                    {m.role === "user" ? (
+                      <div className="flex justify-end">
+                        <div className="max-w-[85%] rounded-2xl bg-violet-600 px-4 py-3 text-sm text-white shadow-md">
+                          {m.text}
                         </div>
-                      )}
-                      <Markdown text={m.text} />
-                      {m.kind === "site" && m.html && (
-                        <SiteDeliveryCard
-                          html={m.html}
-                          name={m.site_name ?? project?.title ?? "site"}
-                          style={m.site_style}
-                          suggestions={m.suggestions ?? []}
-                          projectId={project!.id}
-                          messageId={m.id}
-                          onRequestChange={requestChange}
-                          onOpenPreview={() =>
-                            isDesktop ? void 0 : setMobilePreview(m.id)
-                          }
-                          compact={isDesktop && m.id === lastSite?.id}
-                        />
-                      )}
-                      {m.kind === "questions" && m.id !== openQuestions?.id && (
-                        <p className="mt-2 text-[12px] text-slate-500">Answers sent.</p>
-                      )}
-                    </div>
-                  ),
-                )}
+                      </div>
+                    ) : (
+                      <div className="flex flex-col gap-2">
+                        <div className="flex items-center gap-2 text-xs font-semibold text-violet-400">
+                          <Sparkles className="size-3.5" /> Architecte Web LevelUp
+                        </div>
+                        <div className="rounded-2xl border border-white/10 bg-[#12111E] p-4 text-sm text-slate-200 shadow-md">
+                          <Markdown text={m.text} />
 
-                {busy && !canvasVisible && (
-                  <div className="mb-8" aria-live="polite">
+                          {m.kind === "site" && m.html && project && (
+                            <div className="mt-4 border-t border-white/10 pt-4">
+                              <SiteDeliveryCard
+                                html={m.html}
+                                name={m.site_name ?? project.title ?? "Site"}
+                                style={m.site_style}
+                                suggestions={m.suggestions ?? []}
+                                projectId={project.id}
+                                messageId={m.id}
+                                onRequestChange={requestChange}
+                                onOpenPreview={() => (isDesktop ? void 0 : setMobilePreview(m.id))}
+                                compact={isDesktop && m.id === lastSite?.id}
+                              />
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+
+                {generating && (
+                  <div className="rounded-2xl border border-violet-500/20 bg-violet-950/20 p-4">
                     <BuildProgress
                       step={project?.progress_step ?? 0}
                       pct={project?.progress_pct ?? 1}
@@ -480,20 +481,12 @@ export default function Home() {
                     />
                   </div>
                 )}
-
-                {quotaNotice && (
-                  <div
-                    className="mb-8 rounded-2xl border border-white/10 bg-[#12121c] p-4"
-                    data-testid="quota-notice"
-                  >
-                    <Markdown text={quotaNotice} />
-                  </div>
-                )}
               </div>
 
-              <div className="mx-auto w-full max-w-3xl shrink-0 px-4 pb-4 sm:px-5">
+              {/* Bottom input */}
+              <div className="border-t border-white/6 p-4">
                 {openQuestions && (
-                  <div className="mb-2">
+                  <div className="mb-3">
                     <QuestionWizard
                       message={openQuestions}
                       busy={busy}
@@ -505,18 +498,16 @@ export default function Home() {
                   onSend={send}
                   onStop={() => project && stop.mutate(project.id)}
                   busy={busy}
-                  disabled={false}
+                  disabled={outOfQuota}
                   hero={false}
                   focusRef={textareaRef}
                 />
               </div>
             </div>
 
+            {/* Desktop Live Canvas */}
             {canvasVisible && project && (
-              <aside
-                className="hidden min-h-0 w-[52%] shrink-0 flex-col border-l border-white/6 p-3 lg:flex"
-                data-testid="site-canvas"
-              >
+              <div className="hidden flex-1 flex-col overflow-hidden bg-black lg:flex p-3">
                 {generating || !lastSite?.html ? (
                   <BuildProgress
                     step={project.progress_step ?? 0}
@@ -528,48 +519,45 @@ export default function Home() {
                 ) : (
                   <PreviewFrame
                     html={lastSite.html}
-                    name={lastSite.site_name ?? project.title ?? "site"}
+                    name={lastSite.site_name ?? project.title ?? "Site"}
                     projectId={project.id}
                     messageId={lastSite.id}
                     onRequestChange={() => requestChange()}
                   />
                 )}
-              </aside>
-            )}
-
-            {activeId && !generating && !isDesktop && lastSite && !mobilePreview && (
-              <button
-                type="button"
-                onClick={() => remove.mutate(project!.id)}
-                aria-label="Delete project"
-                className="fixed bottom-24 right-4 z-30 hidden rounded-full border border-white/10 bg-[#12121c] p-2 text-slate-500 shadow-lg hover:text-red-300 sm:block"
-                data-testid="delete-project-button"
-              >
-                <X className="size-4" />
-              </button>
+              </div>
             )}
           </div>
         )}
       </main>
 
-      {/* Mobile / non-desktop fullscreen preview */}
-      {fullscreenSite && (
-        <div
-          className="fixed inset-0 z-[60] flex flex-col bg-[#07070c] p-2 sm:p-4"
-          data-testid="mobile-preview-overlay"
-        >
-          <PreviewFrame
-            html={fullscreenSite.html!}
-            name={fullscreenSite.site_name ?? project?.title ?? "site"}
-            projectId={project!.id}
-            messageId={fullscreenSite.id}
-            onClose={() => setMobilePreview(null)}
-            onRequestChange={() => {
-              setMobilePreview(null);
-              requestChange();
-            }}
-            fullscreen
-          />
+      {/* Mobile Fullscreen Preview Modal */}
+      {fullscreenSite && fullscreenSite.html && project && (
+        <div className="fixed inset-0 z-50 flex flex-col bg-black">
+          <header className="flex items-center justify-between border-b border-white/10 px-4 py-3">
+            <span className="text-xs font-semibold text-white">Aperçu mobile du site compilé</span>
+            <button
+              type="button"
+              onClick={() => setMobilePreview(null)}
+              className="rounded-full p-1 text-slate-400 hover:text-white"
+            >
+              <X className="size-5" />
+            </button>
+          </header>
+          <div className="flex-1">
+            <PreviewFrame
+              html={fullscreenSite.html}
+              name={fullscreenSite.site_name ?? project.title ?? "Site"}
+              projectId={project.id}
+              messageId={fullscreenSite.id}
+              onClose={() => setMobilePreview(null)}
+              onRequestChange={() => {
+                setMobilePreview(null);
+                requestChange();
+              }}
+              fullscreen
+            />
+          </div>
         </div>
       )}
     </div>

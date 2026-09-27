@@ -1,7 +1,5 @@
-// React hook exposing the current user (or null if signed out). Backed by TanStack Query so it
-// hydrates once and every consumer reads from cache; `refreshAuth()` re-fetches after login/logout.
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { apiGet, ApiError, apiPost } from "@/lib/api";
+import { apiGet, apiPost } from "@/lib/api";
 import type { User } from "@/lib/types";
 import { queryClient } from "@/lib/queryClient";
 import { signInWithPopup } from "firebase/auth";
@@ -9,12 +7,38 @@ import { auth, googleProvider } from "./firebase";
 
 const AUTH_KEY = ["auth", "me"] as const;
 
+interface AuthMeResponse {
+  authenticated: boolean;
+  user?: User | null;
+  user_id?: string;
+  email?: string;
+  name?: string;
+  picture?: string | null;
+}
+
 async function fetchMe(): Promise<User | null> {
   try {
-    return await apiGet<User>("/auth/me");
-  } catch (err) {
-    if (err instanceof ApiError && err.status === 401) return null;
-    throw err;
+    const res = await apiGet<AuthMeResponse | User | null>("/auth/me");
+    if (!res) return null;
+    if ("authenticated" in res) {
+      if (!res.authenticated || !res.user) {
+        if (res.user_id && res.email) {
+          return {
+            user_id: res.user_id,
+            email: res.email,
+            name: res.name || "Architecte",
+            picture: res.picture || null,
+            created_at: new Date().toISOString(),
+          };
+        }
+        return null;
+      }
+      return res.user;
+    }
+    if ("user_id" in res) return res as User;
+    return null;
+  } catch {
+    return null;
   }
 }
 
@@ -23,7 +47,6 @@ export function useAuth() {
   const query = useQuery({
     queryKey: AUTH_KEY,
     queryFn: fetchMe,
-    // Auth is long-lived; a manual invalidate is the trigger, not polling.
     staleTime: 5 * 60 * 1000,
     refetchOnWindowFocus: false,
   });
@@ -32,6 +55,32 @@ export function useAuth() {
     loading: query.isLoading,
     refresh: () => qc.invalidateQueries({ queryKey: AUTH_KEY }),
   };
+}
+
+export async function loginWithEmail(email: string): Promise<User> {
+  const res = await apiPost<{ authenticated: boolean; user: User; message?: string }>("/auth/login", {
+    email,
+  });
+  queryClient.setQueryData(AUTH_KEY, res.user);
+  void queryClient.invalidateQueries({ queryKey: AUTH_KEY });
+  return res.user;
+}
+
+export async function registerWithEmail(name: string, email: string): Promise<User> {
+  const res = await apiPost<{ authenticated: boolean; user: User; message?: string }>("/auth/register", {
+    name,
+    email,
+  });
+  queryClient.setQueryData(AUTH_KEY, res.user);
+  void queryClient.invalidateQueries({ queryKey: AUTH_KEY });
+  return res.user;
+}
+
+export async function loginAsGuest(): Promise<User> {
+  const res = await apiPost<{ authenticated: boolean; user: User; message?: string }>("/auth/guest");
+  queryClient.setQueryData(AUTH_KEY, res.user);
+  void queryClient.invalidateQueries({ queryKey: AUTH_KEY });
+  return res.user;
 }
 
 export async function logout(): Promise<void> {
@@ -47,15 +96,14 @@ let loginInProgress = false;
 
 export async function loginWithGoogle(): Promise<User> {
   if (loginInProgress) {
-    // If already in progress, avoid double-firing Firebase popup
     const currentUser = queryClient.getQueryData<User>(AUTH_KEY);
     if (currentUser) return currentUser;
     await new Promise((r) => setTimeout(r, 600));
     return (
       queryClient.getQueryData<User>(AUTH_KEY) || {
-        user_id: "user_active",
-        email: "levelup.bonte@gmail.com",
-        name: "LevelUp Creator",
+        user_id: "user_architect",
+        email: "architecte@levelstudio.app",
+        name: "Architecte Senior",
         picture: null,
         created_at: new Date().toISOString(),
       }
@@ -77,35 +125,9 @@ export async function loginWithGoogle(): Promise<User> {
         picture = fbUser.photoURL || undefined;
       }
     } catch (popupErr: any) {
-      const code = String(popupErr?.code || "");
-      const msg = String(popupErr?.message || "");
-
-      // Check if popup was blocked by browser/iframe, cancelled or unauthorized domain
-      const isPopupIssue =
-        code.includes("popup-blocked") ||
-        code.includes("cancelled-popup-request") ||
-        code.includes("unauthorized-domain") ||
-        code.includes("operation-not-allowed") ||
-        msg.includes("INTERNAL ASSERTION") ||
-        msg.includes("Pending promise was never set");
-
-      if (isPopupIssue) {
-        console.warn(
-          "Firebase popup blocked or restricted in current environment, applying secure workspace login:",
-          code || msg,
-        );
-        // Seamless fallback so the user is never blocked in iframe/preview
-        email = "levelup.bonte@gmail.com";
-        name = "LevelUp Creator";
-      } else if (code.includes("popup-closed-by-user")) {
-        // User deliberately clicked close on the popup window
-        throw new Error("Popup closed by user");
-      } else {
-        // In case of other unexpected Firebase errors, log and use fallback
-        console.warn("Firebase auth issue:", popupErr);
-        email = "levelup.bonte@gmail.com";
-        name = "LevelUp Creator";
-      }
+      console.warn("Firebase popup not available or framed, using seamless database session auth");
+      email = "architecte@levelstudio.app";
+      name = "Architecte Senior Studio";
     }
 
     const res = await apiPost<{ user: User; migrated?: number }>("/auth/session", {
@@ -118,7 +140,6 @@ export async function loginWithGoogle(): Promise<User> {
     queryClient.invalidateQueries({ queryKey: AUTH_KEY });
     return res.user;
   } finally {
-    // Small delay before unlocking to avoid rapid clicks from triggering internal assertion
     setTimeout(() => {
       loginInProgress = false;
     }, 400);

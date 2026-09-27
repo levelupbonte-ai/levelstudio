@@ -38,11 +38,14 @@ function demoNotice(){ document.getElementById('demo-modal').classList.remove('h
 document.querySelectorAll('[data-demo]').forEach((b) => b.addEventListener('click', (e) => { e.preventDefault(); demoNotice(); }));
 </script>`;
 
-const MODAL = `<div id="demo-modal" class="hidden fixed inset-0 z-50 grid place-items-center bg-black/70 p-6">
-  <div class="max-w-sm rounded-2xl bg-white p-6 text-center text-slate-900 shadow-2xl">
-    <p class="text-lg font-semibold">This is a preview</p>
-    <p class="mt-2 text-sm text-slate-600">To turn this into your real working website, contact LevelUp Studio.</p>
-    <button onclick="document.getElementById('demo-modal').classList.add('hidden')" class="mt-5 rounded-full bg-slate-900 px-5 py-2 text-sm text-white">Close</button>
+const MODAL = `<div id="demo-modal" class="hidden fixed inset-0 z-50 grid place-items-center bg-black/75 p-6 backdrop-blur-sm">
+  <div class="max-w-md rounded-2xl border border-white/10 bg-[#12121c] p-6 text-center text-slate-100 shadow-2xl">
+    <div class="mx-auto mb-3 grid size-10 place-items-center rounded-full bg-violet-500/20 text-violet-400">
+      <svg class="size-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+    </div>
+    <p class="font-heading text-lg font-semibold tracking-tight text-white">Mode Aperçu Interactif</p>
+    <p class="mt-2 text-sm leading-relaxed text-slate-400">Cette maquette haute fidélité est entièrement générée avec Tailwind CSS & JS Vanilla. Vous pouvez inspecter le code, le personnaliser dans l'architecte ou l'exporter pour un déploiement immédiat.</p>
+    <button onclick="document.getElementById('demo-modal').classList.add('hidden')" class="mt-5 w-full rounded-xl bg-violet-600 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-violet-500">Poursuivre la navigation</button>
   </div>
 </div>`;
 
