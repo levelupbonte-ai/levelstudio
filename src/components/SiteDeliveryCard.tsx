@@ -39,12 +39,12 @@ export function SiteDeliveryCard({
   const isMobile = useIsMobile();
 
   const defaultSuggestions = [
-    "✨ Ajouter une section FAQ & Réponses",
-    "💬 Intégrer un formulaire de contact",
-    "⭐ Ajouter des avis clients & témoignages",
-    "🎨 Passer en thème sombre / contrasté",
-    "🚀 Ajouter des animations et micro-interactions",
-    "📱 Optimiser le menu et l'en-tête responsive",
+    "✨ Add an interactive FAQ & Answers section",
+    "💬 Add a responsive Contact Form",
+    "⭐ Add Client Testimonials & Social Proof",
+    "🎨 Switch to high-contrast Dark Mode",
+    "🚀 Add smooth entrance animations",
+    "📱 Optimize navigation bar for mobile",
   ];
 
   const activeSuggestions = suggestions && suggestions.length > 0 ? suggestions : defaultSuggestions;
@@ -56,7 +56,7 @@ export function SiteDeliveryCard({
       if (onOpenCanvas) {
         onOpenCanvas();
       }
-      toast.success("Site actif dans le Canvas");
+      toast.success("Site active in Canvas");
     }
   };
 
@@ -79,7 +79,7 @@ export function SiteDeliveryCard({
               </p>
             </div>
             <p className="text-[11px] text-slate-400 mt-0.5 truncate">
-              {style || "Architecture web générée & interactive"}
+              {style || "Interactive generated website draft"}
             </p>
           </div>
         </div>
@@ -92,10 +92,10 @@ export function SiteDeliveryCard({
         >
           <span>
             {isMobile
-              ? "Ouvrir le canvas"
+              ? "Open Canvas"
               : isCanvasVisible
-              ? "Actif dans le Canvas"
-              : "Ouvrir le Canvas"}
+              ? "Active in Canvas"
+              : "Open in Canvas"}
           </span>
           <ExternalLink className="size-3.5" />
         </button>
@@ -105,7 +105,7 @@ export function SiteDeliveryCard({
       <div className="space-y-1.5 pt-1">
         <div className="flex items-center gap-1.5 text-[11px] font-medium text-slate-400">
           <Sparkles className="size-3 text-violet-400" />
-          <span>Suggestions pour perfectionner ce site :</span>
+          <span>Suggestions to refine this site:</span>
         </div>
         <div className="flex flex-wrap gap-1.5">
           {activeSuggestions.map((sug, idx) => (

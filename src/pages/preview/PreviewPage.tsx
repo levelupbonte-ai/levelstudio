@@ -2,6 +2,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft } from "lucide-react";
 import { apiGet } from "@/lib/api";
+import LevelStudioIcon from "@/components/LevelStudioIcon";
 import type { Project } from "@/lib/types";
 
 export default function PreviewPage() {
@@ -20,7 +21,7 @@ export default function PreviewPage() {
     queryKey: ["share-preview", token],
     queryFn: async () => {
       const res = await fetch(`/api/share/${token}`);
-      if (!res.ok) throw new Error("Lien de partage introuvable ou expiré");
+      if (!res.ok) throw new Error("Share link not found or expired");
       return await res.text();
     },
     enabled: Boolean(token),
@@ -37,16 +38,16 @@ export default function PreviewPage() {
         type="button"
         onClick={() => nav("/")}
         className="fixed top-4 left-4 z-50 flex items-center justify-center size-9 rounded-full bg-slate-900/80 hover:bg-slate-900 text-white backdrop-blur shadow-lg transition-transform hover:scale-105"
-        title="Retour au Studio"
-        aria-label="Retour au Studio"
+        title="Back to Studio"
+        aria-label="Back to Studio"
       >
         <ArrowLeft className="size-4" />
       </button>
 
       {isLoading ? (
         <div className="flex h-full w-full flex-col items-center justify-center bg-[#0B0B10] text-slate-400">
-          <div className="size-10 rounded-full border-2 border-violet-500 border-t-transparent animate-spin mb-3" />
-          <p className="text-sm font-medium font-sans">Chargement de votre site en cours...</p>
+          <LevelStudioIcon className="size-14 mb-4" pulsing={true} />
+          <p className="text-sm font-medium font-sans text-slate-300">Loading your LevelStudio preview...</p>
         </div>
       ) : html ? (
         <iframe
@@ -57,13 +58,13 @@ export default function PreviewPage() {
         />
       ) : (
         <div className="flex h-full w-full flex-col items-center justify-center bg-[#0B0B10] text-slate-400 p-6 text-center">
-          <p className="text-base text-slate-300 font-semibold mb-2">Aucun site disponible pour cet aperçu</p>
+          <p className="text-base text-slate-300 font-semibold mb-2">No website draft available for this preview</p>
           <button
             type="button"
             onClick={() => nav("/")}
             className="px-4 py-2 rounded-xl bg-violet-600 hover:bg-violet-500 text-white text-xs font-semibold"
           >
-            Retourner au Studio
+            Back to Studio
           </button>
         </div>
       )}

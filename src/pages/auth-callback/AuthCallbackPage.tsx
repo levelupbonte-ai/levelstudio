@@ -44,11 +44,11 @@ export default function AuthCallbackPage() {
         void queryClient.invalidateQueries({ queryKey: ["auth", "me"] });
         void queryClient.invalidateQueries({ queryKey: ["projects"] });
 
-        toast.success(`Bienvenue, ${res.user.name}`);
+        toast.success(`Welcome, ${res.user.name}`);
         nav("/workspace", { replace: true });
       } catch (err) {
         console.error("Auth callback failed:", err);
-        toast.error("Impossible de finaliser l'authentification");
+        toast.error("Unable to complete authentication");
         nav("/", { replace: true });
       }
     }
@@ -61,10 +61,10 @@ export default function AuthCallbackPage() {
       <div className="flex flex-col items-center gap-4 text-center">
         <Loader2 className="size-8 animate-spin text-violet-400" />
         <p className="font-heading text-lg font-semibold text-white">
-          Synchronisation de votre session...
+          Syncing your session...
         </p>
         <p className="text-xs text-slate-400">
-          Enregistrement sécurisé LevelUp Studio.
+          Secured LevelStudio connection.
         </p>
       </div>
     </div>

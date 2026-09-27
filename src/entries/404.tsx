@@ -13,9 +13,9 @@ function NotFoundApp() {
       {/* Header */}
       <header className="relative z-10 flex h-20 items-center justify-between px-6 sm:px-12 border-b border-white/5">
         <a href="/" className="flex items-center gap-2.5 transition-opacity hover:opacity-85">
-          <img src="/favicon.svg" alt="LevelUp Logo" className="size-6 shrink-0" />
+          <img src="/favicon.svg" alt="LevelStudio Logo" className="size-6 shrink-0" />
           <span className="font-heading text-lg font-bold tracking-tight text-white">
-            LevelUp<span className="text-violet-400">.Studio</span>
+            Level<span className="text-violet-400">Studio</span>
           </span>
         </a>
         <a
@@ -23,7 +23,7 @@ function NotFoundApp() {
           className="inline-flex items-center gap-2 text-xs font-semibold text-slate-400 hover:text-white transition-colors"
         >
           <ArrowLeft className="size-4" />
-          <span>Retour au Studio</span>
+          <span>Back to Studio</span>
         </a>
       </header>
 

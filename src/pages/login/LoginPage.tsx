@@ -4,6 +4,8 @@ import { ArrowLeft, Loader2, ShieldCheck, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { Toaster } from "@/components/ui/sonner";
 import { loginWithGoogle, useAuth } from "@/lib/auth";
+import LevelStudioLogo from "@/components/LevelStudioLogo";
+import LevelStudioIcon from "@/components/LevelStudioIcon";
 
 export default function LoginPage() {
   const nav = useNavigate();
@@ -20,9 +22,9 @@ export default function LoginPage() {
           <div className="mx-auto mb-4 grid size-14 place-items-center rounded-2xl bg-gradient-to-br from-violet-500 to-indigo-600 shadow-lg shadow-violet-500/30">
             <ShieldCheck className="size-7 text-white" />
           </div>
-          <h2 className="font-heading text-2xl font-bold text-white">Session Active</h2>
+          <h2 className="font-heading text-2xl font-bold text-white">Active Session</h2>
           <p className="mt-2 text-sm text-slate-400">
-            Connecté en tant que <span className="font-semibold text-violet-300">{user.name}</span> ({user.email}).
+            Signed in as <span className="font-semibold text-violet-300">{user.name}</span> ({user.email}).
           </p>
           <div className="mt-6 flex flex-col gap-3">
             <button
@@ -30,14 +32,14 @@ export default function LoginPage() {
               onClick={() => nav("/workspace")}
               className="w-full rounded-xl bg-violet-600 py-3 text-sm font-semibold text-white shadow-lg transition-transform hover:bg-violet-500 active:scale-[0.98]"
             >
-              Accéder au Workspace
+              Open Workspace
             </button>
             <button
               type="button"
               onClick={() => nav("/")}
               className="w-full rounded-xl border border-white/10 py-3 text-sm font-medium text-slate-300 hover:bg-white/5 transition-colors"
             >
-              Retourner au Studio
+              Back to Studio
             </button>
           </div>
         </div>
@@ -50,11 +52,11 @@ export default function LoginPage() {
     setError(null);
     try {
       await loginWithGoogle();
-      toast.success("Connexion Google réussie !");
+      toast.success("Google sign-in successful!");
       nav("/workspace");
     } catch (err: any) {
       if (err?.code !== "auth/popup-closed-by-user") {
-        setError("Erreur lors de l'authentification Google.");
+        setError("Error during Google authentication.");
       }
     } finally {
       setLoading(false);
@@ -65,51 +67,36 @@ export default function LoginPage() {
     <div className="relative flex min-h-dvh flex-col justify-between bg-[#0A0A0F] text-slate-100 font-sans">
       <Toaster richColors />
 
-      {/* Background glow effects */}
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-x-0 top-0 h-[500px]"
-        style={{
-          background: "radial-gradient(ellipse 70% 80% at 50% 0%, rgba(139,92,246,0.22), transparent 70%)",
-        }}
-      />
-
-      {/* Top navigation - discreet back button without bubble */}
+      {/* Top navigation */}
       <header className="relative z-10 flex items-center justify-between border-b border-white/6 px-6 py-4">
         <button
           type="button"
           onClick={() => nav("/")}
           className="p-1.5 text-slate-400 hover:text-white transition-colors"
-          title="Retour à l'accueil"
-          aria-label="Retour"
+          title="Back to home"
+          aria-label="Back"
         >
           <ArrowLeft className="size-5" />
         </button>
 
-        <div className="flex items-center gap-2">
-          <img src="/favicon.svg" alt="LevelUp" className="size-5 shrink-0" />
-          <span className="font-heading text-[16px] font-semibold text-white">
-            LevelUp<span className="text-violet-400">.Studio</span>
-          </span>
-        </div>
+        <LevelStudioLogo size="sm" showSubtitle={false} onClick={() => nav("/")} />
       </header>
 
       {/* Main card - dedicated Google sign-in */}
       <main className="relative z-10 mx-auto my-auto w-full max-w-md px-4 py-8">
-        <div className="overflow-hidden rounded-3xl border border-white/10 bg-[#12111E] p-8 sm:p-10 shadow-[0_20px_80px_-20px_rgba(139,92,246,0.35)] text-center">
-          <div className="mx-auto mb-5 flex size-16 items-center justify-center rounded-2xl bg-violet-950/40 border border-violet-500/30 shadow-[0_0_25px_rgba(139,92,246,0.25)]">
-            <img
-              src="/favicon.svg"
-              alt="LevelUp Logo"
-              className="size-10 shrink-0 drop-shadow-[0_4px_12px_rgba(139,92,246,0.5)]"
-            />
+        <div className="overflow-hidden rounded-3xl border border-white/10 bg-[#12111E] p-8 sm:p-10 shadow-2xl text-center">
+          <div className="mx-auto mb-5 flex justify-center">
+            <LevelStudioIcon className="size-12" />
           </div>
 
           <h1 className="font-heading text-2xl font-bold tracking-tight text-white sm:text-3xl">
-            Connexion au Studio
+            Sign in to Studio
           </h1>
+          <p className="mt-2 text-xs uppercase tracking-widest text-violet-400 font-semibold">
+            LevelStudio by LevelUp Ecosystem
+          </p>
           <p className="mt-2 text-sm text-slate-400 leading-relaxed">
-            Synchronisez vos projets, exportez vos codes sources et retrouvez vos sites créés.
+            Sync your projects, export single-file source code, and manage your website drafts.
           </p>
 
           {error && (
@@ -147,18 +134,18 @@ export default function LoginPage() {
                   />
                 </svg>
               )}
-              <span>{loading ? "Authentification en cours..." : "Continuer avec Google"}</span>
+              <span>{loading ? "Signing in..." : "Continue with Google"}</span>
             </button>
           </div>
 
           <p className="mt-6 text-[12px] text-slate-500 leading-relaxed">
-            Vos projets restent sécurisés et associés à votre identifiant Google. Aucune clé sensible n'est requise.
+            Your projects are securely linked to your account. No credit card or API keys required.
           </p>
         </div>
       </main>
 
       <footer className="relative z-10 border-t border-white/6 py-4 text-center text-xs text-slate-500">
-        LevelUp Studio — Tous droits réservés.
+        LevelStudio — A free tool by LevelUp Ecosystem. All rights reserved.
       </footer>
     </div>
   );

@@ -1,59 +1,38 @@
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Home, LayoutGrid, FolderCode } from "lucide-react";
+import LevelStudioLogo from "@/components/LevelStudioLogo";
+import LevelStudioIcon from "@/components/LevelStudioIcon";
 
 export default function NotFoundPage() {
   const nav = useNavigate();
 
   return (
     <div className="relative min-h-screen w-full flex flex-col justify-between bg-[#0B0B14] text-white overflow-hidden selection:bg-[#7C3AED] selection:text-white">
-      {/* Background glow effects */}
-      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 size-[500px] rounded-full bg-violet-600/10 blur-[120px] pointer-events-none" />
-      <div className="absolute bottom-10 right-10 size-[350px] rounded-full bg-indigo-600/10 blur-[100px] pointer-events-none" />
-
       {/* Header */}
       <header className="relative z-10 flex h-20 items-center justify-between px-6 sm:px-12 border-b border-white/5">
-        <button
-          type="button"
-          onClick={() => nav("/")}
-          className="flex items-center gap-2.5 transition-opacity hover:opacity-85"
-        >
-          <img src="/favicon.svg" alt="LevelUp Logo" className="size-6 shrink-0" />
-          <span className="font-heading text-lg font-bold tracking-tight text-white">
-            LevelUp<span className="text-violet-400">.Studio</span>
-          </span>
-        </button>
+        <LevelStudioLogo size="sm" showSubtitle={false} onClick={() => nav("/")} />
         <button
           type="button"
           onClick={() => nav("/")}
           className="inline-flex items-center gap-2 text-xs font-semibold text-slate-400 hover:text-white transition-colors"
         >
           <ArrowLeft className="size-4" />
-          <span>Retour au Studio</span>
+          <span>Back to Studio</span>
         </button>
       </header>
 
       {/* Main Content */}
       <main className="relative z-10 flex flex-1 flex-col items-center justify-center px-6 py-12 text-center">
-        {/* Shattered Graphic container */}
-        <div className="relative mb-8">
-          <div className="size-28 sm:size-32 rounded-3xl bg-violet-950/40 border border-violet-500/30 flex items-center justify-center shadow-[0_0_50px_rgba(124,58,237,0.3)] mx-auto">
-            <img
-              src="/favicon.svg"
-              alt="LevelUp Shattered Star"
-              className="size-16 sm:size-20 drop-shadow-[0_8px_24px_rgba(124,58,237,0.6)] animate-pulse"
-            />
-          </div>
-          <span className="absolute -bottom-3 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full bg-[#161426] border border-violet-500/40 text-[11px] font-mono font-bold uppercase tracking-widest text-violet-300">
-            Error 404
-          </span>
+        <div className="mb-6 flex justify-center">
+          <LevelStudioIcon className="size-16" />
         </div>
 
         <h1 className="font-heading text-3xl sm:text-5xl font-extrabold tracking-tight text-white max-w-xl">
-          This page <span className="bg-gradient-to-r from-violet-400 via-fuchsia-400 to-indigo-300 bg-clip-text text-transparent">shattered</span>
+          This page <span className="bg-gradient-to-r from-violet-400 via-fuchsia-400 to-indigo-300 bg-clip-text text-transparent">does not exist</span>
         </h1>
 
         <p className="mt-4 max-w-md text-sm sm:text-base text-slate-400 leading-relaxed">
-          The page you're looking for doesn't exist or has moved. Let's put things back together in the studio.
+          The page you're looking for doesn't exist or has moved. Let's get you back into the studio.
         </p>
 
         {/* Action Buttons */}

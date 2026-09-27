@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { apiPost } from "@/lib/api";
+import LevelStudioIcon from "@/components/LevelStudioIcon";
 import type { Project, ShareLink } from "@/lib/types";
 
 interface InteractiveCanvasProps {
@@ -44,41 +45,41 @@ export default function InteractiveCanvas({
   const handleTitleSubmit = () => {
     if (canvasTitle.trim() && onTitleChange) {
       onTitleChange(canvasTitle.trim());
-      toast.success("Titre du projet mis à jour");
+      toast.success("Project title updated");
     }
   };
 
   const handleSaveToCloud = () => {
-    toast.success("Sauvegardé dans l'espace cloud");
+    toast.success("Saved to cloud storage");
   };
 
   const handleUndo = () => {
-    toast.info("Annuler l'action précédente");
+    toast.info("Undo previous action");
     setHistoryIndex((prev) => Math.max(0, prev - 1));
   };
 
   const handleRedo = () => {
-    toast.info("Rétablir l'action");
+    toast.info("Redo action");
     setHistoryIndex((prev) => prev + 1);
   };
 
   const handleOpenNewTab = () => {
     if (project?.id) {
       window.open(`/api/projects/${project.id}/html`, "_blank", "noopener");
-      toast.success("Ouverture du site réel dans un nouvel onglet");
+      toast.success("Opening live preview in a new tab");
     } else if (html) {
       const blob = new Blob([html], { type: "text/html;charset=utf-8" });
       const url = URL.createObjectURL(blob);
       window.open(url, "_blank", "noopener");
-      toast.success("Ouverture du site réel dans un nouvel onglet");
+      toast.success("Opening live preview in a new tab");
     } else {
-      toast.info("Aucun site à prévisualiser pour l'instant");
+      toast.info("No website to preview yet");
     }
   };
 
   const handleOpenShareModal = async () => {
     if (!project?.id) {
-      toast.info("Générez d'abord une architecture avant de partager le lien");
+      toast.info("Generate a website preview before sharing the link");
       return;
     }
     try {
@@ -98,13 +99,13 @@ export default function InteractiveCanvas({
     try {
       await navigator.clipboard.writeText(shareUrl);
       setIsCopied(true);
-      toast.success("Lien de partage copié dans le presse-papier !");
+      toast.success("Share link copied to clipboard!");
       setTimeout(() => {
         setIsCopied(false);
         setIsShareModalOpen(false);
       }, 1500);
     } catch {
-      toast.error("Impossible de copier le lien");
+      toast.error("Failed to copy link");
     }
   };
 
@@ -112,7 +113,7 @@ export default function InteractiveCanvas({
     if (!document.fullscreenElement) {
       document.documentElement.requestFullscreen().catch(() => {});
       setIsFullscreen(true);
-      toast.success("Mode plein écran activé");
+      toast.success("Fullscreen enabled");
     } else {
       document.exitFullscreen().catch(() => {});
       setIsFullscreen(false);
@@ -125,14 +126,15 @@ export default function InteractiveCanvas({
       ? "AI Agent is constructing layout"
       : html
       ? "Production Architecture Ready"
-      : "Prêt pour votre instruction");
+      : "Ready for your instructions");
 
   return (
     <div className="h-full w-full flex flex-col bg-[#f8fafc] overflow-hidden m-0 p-0 text-slate-800 rounded-2xl shadow-2xl border border-slate-200/80 relative">
       {/* HEADER */}
       <header className="header-glass w-full h-[60px] sm:h-[64px] flex items-center justify-between px-3 sm:px-5 shrink-0 z-40 select-none">
         {/* Editable Title */}
-        <div className="flex items-center min-w-0 pr-2 sm:pr-4 flex-1">
+        <div className="flex items-center min-w-0 pr-2 sm:pr-4 flex-1 gap-2">
+          <LevelStudioIcon className="size-5 shrink-0" />
           <input
             id="canvas-title"
             type="text"
@@ -145,7 +147,7 @@ export default function InteractiveCanvas({
               }
             }}
             className="bg-transparent hover:bg-slate-100 focus:bg-white text-slate-800 text-[14px] sm:text-[15px] font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/30 px-3 py-1.5 rounded-md w-full truncate transition-colors cursor-text"
-            title="Cliquez pour renommer"
+            title="Click to rename"
           />
         </div>
 
@@ -157,7 +159,7 @@ export default function InteractiveCanvas({
               type="button"
               onClick={handleSaveToCloud}
               className="p-2 w-9 h-9 sm:w-10 sm:h-10 rounded-full hover:bg-slate-100 hover:text-slate-700 transition-colors flex justify-center items-center"
-              title="Sauvegarder dans le cloud"
+              title="Save to cloud"
             >
               <i className="fa-solid fa-cloud-arrow-up text-[15px]"></i>
             </button>
@@ -165,7 +167,7 @@ export default function InteractiveCanvas({
               type="button"
               onClick={handleUndo}
               className="p-2 w-9 h-9 sm:w-10 sm:h-10 rounded-full hover:bg-slate-100 hover:text-slate-700 transition-colors flex justify-center items-center hidden sm:flex"
-              title="Annuler"
+              title="Undo"
             >
               <i className="fa-solid fa-rotate-left text-[14px]"></i>
             </button>
@@ -173,7 +175,7 @@ export default function InteractiveCanvas({
               type="button"
               onClick={handleRedo}
               className="p-2 w-9 h-9 sm:w-10 sm:h-10 rounded-full hover:bg-slate-100 hover:text-slate-700 transition-colors flex justify-center items-center hidden sm:flex"
-              title="Rétablir"
+              title="Redo"
             >
               <i className="fa-solid fa-rotate-right text-[14px]"></i>
             </button>
@@ -185,7 +187,7 @@ export default function InteractiveCanvas({
           <div className="pill-container shrink-0 mx-1">
             <span
               className="pill-btn active flex items-center gap-1.5 font-medium select-none"
-              title="Aperçu Réel"
+              title="Live Preview"
             >
               <i className="fa-solid fa-eye text-blue-600"></i>
               <span>Preview</span>
@@ -201,7 +203,7 @@ export default function InteractiveCanvas({
               type="button"
               onClick={handleOpenNewTab}
               className="p-2 w-9 h-9 sm:w-10 sm:h-10 text-slate-600 hover:text-blue-600 hover:bg-blue-50 rounded-full transition-colors flex justify-center items-center"
-              title="Ouvrir dans un nouvel onglet"
+              title="Open in new tab"
             >
               <i className="fa-solid fa-arrow-up-right-from-square text-[15px]"></i>
             </button>
@@ -210,7 +212,7 @@ export default function InteractiveCanvas({
               type="button"
               onClick={handleOpenShareModal}
               className="p-2 w-9 h-9 sm:w-10 sm:h-10 text-slate-600 hover:text-blue-600 hover:bg-blue-50 rounded-full transition-colors flex justify-center items-center"
-              title="Partager le site généré"
+              title="Share generated website"
             >
               <i className="fa-solid fa-share-nodes text-[15px]"></i>
             </button>
@@ -219,7 +221,7 @@ export default function InteractiveCanvas({
               type="button"
               onClick={toggleFullScreen}
               className="p-2 w-9 h-9 sm:w-10 sm:h-10 text-slate-600 hover:bg-slate-100 rounded-full transition-colors flex justify-center items-center hidden sm:flex"
-              title={isFullscreen ? "Quitter le plein écran" : "Plein écran"}
+              title={isFullscreen ? "Exit full screen" : "Full screen"}
             >
               <i
                 className={`fa-solid ${
@@ -259,11 +261,10 @@ export default function InteractiveCanvas({
                 <i className="fa-solid fa-wand-magic-sparkles text-blue-500"></i>
               </div>
               <h3 className="text-base font-semibold text-slate-700">
-                L'espace de conception est prêt
+                Design Canvas is Ready
               </h3>
               <p className="mt-1.5 max-w-sm text-xs text-slate-500 leading-relaxed">
-                Décrivez votre projet dans le compositeur pour lancer la
-                construction en direct de votre site.
+                Describe your business or project in the composer to start generating your live preview.
               </p>
             </div>
           )}
@@ -382,7 +383,7 @@ export default function InteractiveCanvas({
           className="fixed bottom-6 right-6 z-30 bg-slate-900 hover:bg-blue-600 text-white shadow-lg shadow-slate-900/20 px-4 py-3 rounded-full text-sm font-medium flex items-center gap-2 transition-all transform hover:scale-105 group"
         >
           <i className="fa-solid fa-wand-magic-sparkles group-hover:animate-pulse"></i>
-          <span className="hidden sm:inline">Demander un ajustement</span>
+          <span className="hidden sm:inline">Request adjustments</span>
         </button>
       )}
 
@@ -401,7 +402,7 @@ export default function InteractiveCanvas({
           >
             <div className="flex items-center justify-between mb-5">
               <h3 className="font-semibold text-slate-800 text-base flex items-center gap-2">
-                <i className="fa-solid fa-link text-blue-500"></i> Partager le site Web
+                <i className="fa-solid fa-link text-blue-500"></i> Share Website Preview
               </h3>
               <button
                 type="button"
@@ -412,7 +413,7 @@ export default function InteractiveCanvas({
               </button>
             </div>
             <p className="text-xs text-slate-500 mb-4 leading-relaxed">
-              Toute personne disposant de cette URL peut accéder à l'aperçu interactif de votre application.
+              Anyone with this link can interact with your live website preview.
             </p>
             <div className="flex items-center gap-2 bg-slate-50 p-1.5 rounded-lg border border-slate-200">
               <input
@@ -432,7 +433,7 @@ export default function InteractiveCanvas({
                     isCopied ? "fa-circle-check" : "fa-copy"
                   }`}
                 ></i>
-                {isCopied ? "Copié" : "Copier"}
+                {isCopied ? "Copied" : "Copy"}
               </button>
             </div>
           </div>

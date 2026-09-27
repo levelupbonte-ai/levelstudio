@@ -63,7 +63,7 @@ export default function LoginGate({ open, onClose, reason }: LoginGateProps) {
           Workspace Sign in
         </span>
         <h2 className="mt-4 font-heading text-2xl font-semibold text-white sm:text-[26px]">
-          Save the sites you build with LevelUp Studio
+          Save the sites you build with LevelStudio
         </h2>
         <p className="mt-2 text-[13.5px] leading-relaxed text-slate-400">
           {reason ??

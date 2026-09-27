@@ -3,11 +3,10 @@
 // design" button hands the id back to the parent. Also exposes an "Import a template" pill.
 import { useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowRight, Check, ChevronLeft, ChevronRight, Layers, Upload } from "lucide-react";
+import { ArrowRight, Check, ChevronLeft, ChevronRight, Layers } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { apiGet } from "@/lib/api";
 import { cn } from "@/lib/utils";
-import ImportTemplate from "@/components/ImportTemplate";
 import TemplatePreview from "@/components/TemplatePreview";
 import type { Template } from "@/lib/types";
 
@@ -91,7 +90,6 @@ export default function TemplateGallery({ selected, onSelect, disabled, onSeeAll
   const nav = useNavigate();
   const [filter, setFilter] = useState<string>("all");
   const [preview, setPreview] = useState<Template | null>(null);
-  const [importOpen, setImportOpen] = useState(false);
   const rowRef = useRef<HTMLDivElement>(null);
   const [atStart, setAtStart] = useState(true);
   const [atEnd, setAtEnd] = useState(false);
@@ -127,19 +125,11 @@ export default function TemplateGallery({ selected, onSelect, disabled, onSeeAll
           </h3>
         </div>
         <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setImportOpen(true)}
-            className="inline-flex items-center gap-1 rounded-full border border-white/10 px-3 py-1.5 text-[12px] text-slate-300 transition-colors duration-200 hover:border-violet-400/40 hover:text-white"
-            data-testid="import-template-open"
-          >
-            <Upload className="size-3.5" /> Import
-          </button>
           {onSeeAll && (
             <button
               type="button"
               onClick={onSeeAll}
-              className="hidden items-center gap-1 rounded-full border border-white/10 px-3.5 py-1.5 text-[12px] text-slate-300 transition-colors duration-200 hover:border-violet-400/40 hover:text-white sm:inline-flex"
+              className="inline-flex items-center gap-1 rounded-full border border-white/10 px-3.5 py-1.5 text-[12px] text-slate-300 transition-colors duration-200 hover:border-violet-400/40 hover:text-white"
               data-testid="templates-see-all"
             >
               See all <ArrowRight className="size-3" />
@@ -227,11 +217,6 @@ export default function TemplateGallery({ selected, onSelect, disabled, onSeeAll
           }}
         />
       )}
-      <ImportTemplate
-        open={importOpen}
-        onClose={() => setImportOpen(false)}
-        onImported={(t) => onSelect(t.id)}
-      />
     </section>
   );
 }

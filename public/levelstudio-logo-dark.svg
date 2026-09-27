@@ -1,0 +1,73 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 680 200" width="680" height="200">
+  <defs>
+    <linearGradient id="lsd-top-l" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#C8B3FE"/>
+      <stop offset="100%" stop-color="#AC7AFE"/>
+    </linearGradient>
+    <linearGradient id="lsd-top-r" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#843FF4"/>
+      <stop offset="100%" stop-color="#6F23E7"/>
+    </linearGradient>
+    <linearGradient id="lsd-right-u" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#7327EB"/>
+      <stop offset="100%" stop-color="#5C16D6"/>
+    </linearGradient>
+    <linearGradient id="lsd-right-d" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#5111CA"/>
+      <stop offset="100%" stop-color="#3A08A3"/>
+    </linearGradient>
+    <linearGradient id="lsd-botr-u" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#430BA8"/>
+      <stop offset="100%" stop-color="#300586"/>
+    </linearGradient>
+    <linearGradient id="lsd-botr-d" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#5211C8"/>
+      <stop offset="100%" stop-color="#3D09A5"/>
+    </linearGradient>
+    <linearGradient id="lsd-botl-d" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#691CDD"/>
+      <stop offset="100%" stop-color="#4F0DBB"/>
+    </linearGradient>
+    <linearGradient id="lsd-botl-u" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#7C2CF0"/>
+      <stop offset="100%" stop-color="#6117D2"/>
+    </linearGradient>
+    <linearGradient id="lsd-left-d" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#9754FD"/>
+      <stop offset="100%" stop-color="#7A2EF1"/>
+    </linearGradient>
+    <linearGradient id="lsd-left-u" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#B583FF"/>
+      <stop offset="100%" stop-color="#9C64FD"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Left Icon: Viewfinder Frame scaled to 160x160 centered at (100, 100) -->
+  <g transform="translate(20, 20) scale(0.3125)">
+    <!-- 512x512 canvas scaled to 160x160 -->
+    <path d="M 64 144 L 64 64 L 144 64" fill="none" stroke="#7C3AED" stroke-width="24" stroke-linecap="square"/>
+    <path d="M 368 64 L 448 64 L 448 144" fill="none" stroke="#7C3AED" stroke-width="24" stroke-linecap="square"/>
+    <path d="M 64 368 L 64 448 L 144 448" fill="none" stroke="#7C3AED" stroke-width="24" stroke-linecap="square"/>
+    <path d="M 368 448 L 448 448 L 448 368" fill="none" stroke="#7C3AED" stroke-width="24" stroke-linecap="square"/>
+
+    <g transform="translate(256, 256) scale(0.44) translate(-256, -256)">
+      <polygon points="256,278 256,38 202,192" fill="url(#lsd-top-l)"/>
+      <polygon points="256,278 256,38 310,192" fill="url(#lsd-top-r)"/>
+      <polygon points="256,278 310,192 484,204" fill="url(#lsd-right-u)"/>
+      <polygon points="256,278 484,204 344,280" fill="url(#lsd-right-d)"/>
+      <polygon points="256,278 344,280 397,470" fill="url(#lsd-botr-u)"/>
+      <polygon points="256,278 397,470 256,362" fill="url(#lsd-botr-d)"/>
+      <polygon points="256,278 256,362 115,470" fill="url(#lsd-botl-d)"/>
+      <polygon points="256,278 115,470 168,280" fill="url(#lsd-botl-u)"/>
+      <polygon points="256,278 168,280 28,204" fill="url(#lsd-left-d)"/>
+      <polygon points="256,278 28,204 202,192" fill="url(#lsd-left-u)"/>
+    </g>
+  </g>
+
+  <!-- Typography Right -->
+  <!-- LevelStudio -->
+  <text x="210" y="105" font-family="'Sora', -apple-system, BlinkMacSystemFont, sans-serif" font-size="52" font-weight="800" letter-spacing="-0.03em" fill="#FFFFFF">Level<tspan fill="#A855F7">Studio</tspan></text>
+  
+  <!-- Subtitle -->
+  <text x="212" y="142" font-family="'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif" font-size="12.5" font-weight="700" letter-spacing="0.22em" fill="#94A3B8">BY LEVELUP ECOSYSTEM</text>
+</svg>

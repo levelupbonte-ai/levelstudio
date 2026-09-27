@@ -1,0 +1,14 @@
+User-agent: *
+Allow: /$
+Disallow: /projects
+Disallow: /projects/
+Disallow: /preview/
+Disallow: /workspace
+Disallow: /workspace/
+Disallow: /templates
+Disallow: /templates/
+Disallow: /share/
+Disallow: /auth/
+Disallow: /api/
+
+Sitemap: https://studio.levelup-ecosystem.com/sitemap.xml

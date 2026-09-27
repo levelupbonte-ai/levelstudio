@@ -1,3 +1,4 @@
+import path from "node:path";
 import express, { type Request, type Response, type NextFunction } from "express";
 import cookieParser from "cookie-parser";
 import { authRouter } from "./routes/auth.ts";
@@ -7,6 +8,18 @@ import { db } from "./db.ts";
 export function createExpressApp() {
   const app = express();
   app.set("trust proxy", 1);
+
+  // Direct SEO endpoints for crawlers
+  const publicDir = path.resolve(process.cwd(), "public");
+  app.get("/robots.txt", (_req, res) => {
+    res.type("text/plain").sendFile(path.join(publicDir, "robots.txt"));
+  });
+  app.get("/sitemap.xml", (_req, res) => {
+    res.type("application/xml").sendFile(path.join(publicDir, "sitemap.xml"));
+  });
+  app.get("/llms.txt", (_req, res) => {
+    res.type("text/plain; charset=utf-8").sendFile(path.join(publicDir, "llms.txt"));
+  });
 
   // CORS middleware for custom domains & deployments
   app.use((req, res, next) => {
@@ -66,7 +79,7 @@ export function createExpressApp() {
     res.status(status).json({
       error: true,
       status,
-      detail: err?.message || "Une erreur inattendue est survenue dans l'architecte.",
+      detail: err?.message || "An unexpected error occurred in the website builder.",
       timestamp: new Date().toISOString(),
     });
   });

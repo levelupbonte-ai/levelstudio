@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
-import { ArrowRight, Database, FolderKanban, Globe, Layout, Loader2, LogIn, LogOut, Sparkles, Wand2, X } from "lucide-react";
+import { ArrowRight, ChevronDown, ExternalLink, Database, FolderKanban, Globe, Layout, Loader2, LogIn, LogOut, Menu, Sparkles, Wand2, X } from "lucide-react";
 import { toast } from "sonner";
 import { Toaster } from "@/components/ui/sonner";
 import BuildProgress from "@/components/BuildProgress";
@@ -11,9 +11,12 @@ import Markdown from "@/components/Markdown";
 import QuestionWizard from "@/components/QuestionWizard";
 import ReminderBanner from "@/components/ReminderBanner";
 import ServiceRail, { type Service } from "@/components/ServiceRail";
-import SiteDeliveryCard, { PreviewFrame } from "@/components/SiteDeliveryCard";
+import SiteDeliveryCard from "@/components/SiteDeliveryCard";
 import InteractiveCanvas from "@/components/InteractiveCanvas";
 import TemplateGallery from "@/components/TemplateGallery";
+import LevelStudioLogo from "@/components/LevelStudioLogo";
+import LevelStudioIcon from "@/components/LevelStudioIcon";
+import { cn } from "@/lib/utils";
 import { ApiError, apiDelete, apiGet, apiPost } from "@/lib/api";
 import { logout, useAuth } from "@/lib/auth";
 import type {
@@ -59,6 +62,12 @@ export default function HomePage() {
   const [loginOpen, setLoginOpen] = useState(false);
   const [loginReason, setLoginReason] = useState<string | undefined>(undefined);
   const [mobilePreview, setMobilePreview] = useState<string | null>(null);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [openFooterSection, setOpenFooterSection] = useState<string | null>(null);
+
+  const toggleFooterSection = (section: string) => {
+    setOpenFooterSection((prev) => (prev === section ? null : section));
+  };
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -82,8 +91,8 @@ export default function HomePage() {
         if (n > 0) {
           toast.success(
             n === 1
-              ? "Bienvenue — 1 projet synchronisé avec votre compte."
-              : `Bienvenue — ${n} projets synchronisés avec votre compte.`,
+              ? "Welcome — 1 project synced to your account."
+              : `Welcome — ${n} projects synced to your account.`,
           );
         }
         window.sessionStorage.removeItem("levelup_migrated");
@@ -126,7 +135,7 @@ export default function HomePage() {
     },
     onError: (err) => {
       if (err instanceof ApiError && err.status === 401) {
-        setLoginReason("Authentifiez-vous pour sauvegarder cette architecture dans votre compte.");
+        setLoginReason("Sign in to save this website project to your account.");
         setLoginOpen(true);
         return;
       }
@@ -135,13 +144,13 @@ export default function HomePage() {
           err.body && typeof err.body === "object"
             ? String((err.body as { detail?: unknown }).detail ?? "")
             : "";
-        setQuotaNotice(detail || "Limite quotidienne de compilation atteinte.");
+        setQuotaNotice(detail || "Daily preview generation limit reached.");
         return;
       }
       const detail =
         err instanceof ApiError && err.body && typeof err.body === "object"
-          ? String((err.body as { detail?: unknown }).detail ?? "Une erreur est survenue")
-          : "Une erreur est survenue";
+          ? String((err.body as { detail?: unknown }).detail ?? "An unexpected error occurred")
+          : "An unexpected error occurred";
       toast.error(detail);
     },
   });
@@ -150,7 +159,7 @@ export default function HomePage() {
     mutationFn: (id: string) => apiPost<Project>(`/projects/${id}/stop`),
     onSuccess: (project) => {
       qc.setQueryData(["project", project.id], project);
-      toast.success("Génération interrompue");
+      toast.success("Generation stopped");
     },
   });
 
@@ -159,7 +168,7 @@ export default function HomePage() {
     onSuccess: (_d, id) => {
       if (activeId === id) setActiveId(null);
       void qc.invalidateQueries({ queryKey: ["projects"] });
-      toast.success("Projet supprimé de la base de données");
+      toast.success("Project deleted from database");
     },
   });
 
@@ -183,7 +192,7 @@ export default function HomePage() {
   useEffect(() => {
     if (!generating && lastMessage?.kind === "site" && delivered.current !== lastMessage.id) {
       delivered.current = lastMessage.id;
-      toast.success("Architecture finalisée avec succès");
+      toast.success("Website draft generated successfully");
       void qc.invalidateQueries({ queryKey: ["projects"] });
       void qc.invalidateQueries({ queryKey: ["db-stats"] });
     }
@@ -196,12 +205,12 @@ export default function HomePage() {
   const send = (text: string, attachments: Attachment[]) => {
     if (outOfQuota) {
       setQuotaNotice(
-        "Vous avez atteint le quota quotidien du studio. Vos projets restent sauvegardés dans votre espace de travail.",
+        "You have reached the daily studio quota. Your existing projects remain saved in your workspace.",
       );
       return;
     }
     const brief = picked.length
-      ? `Secteur d'activité : ${picked.map((p) => p.label).join(", ")}.${text ? `\n${text}` : ""}`
+      ? `Industry category: ${picked.map((p) => p.label).join(", ")}.${text ? `\n${text}` : ""}`
       : text;
     setQuotaNotice(null);
     chat.mutate({ text: brief, attachments });
@@ -248,11 +257,10 @@ export default function HomePage() {
             <button
               type="button"
               onClick={startNew}
-              className="flex items-center gap-2 font-heading text-[16px] font-bold tracking-tight text-white transition-opacity duration-200 hover:opacity-85"
+              className="flex items-center gap-2 transition-opacity duration-200 hover:opacity-85 text-left"
               data-testid="brand-home-button"
             >
-              <img src="/favicon.svg" alt="LevelUp" className="size-5 shrink-0" />
-              <span>LevelUp<span className="text-violet-400">.Studio</span></span>
+              <LevelStudioLogo size="sm" showSubtitle={true} />
             </button>
 
             {project && (
@@ -265,7 +273,8 @@ export default function HomePage() {
             )}
           </div>
 
-          <div className="flex shrink-0 items-center gap-2">
+          {/* Desktop Navigation Links */}
+          <div className="hidden sm:flex shrink-0 items-center gap-2">
             <button
               type="button"
               onClick={() => nav("/templates")}
@@ -333,7 +342,158 @@ export default function HomePage() {
               </button>
             )}
           </div>
+
+          {/* Mobile Hamburger Button */}
+          <div className="flex sm:hidden items-center">
+            <button
+              type="button"
+              onClick={() => setMobileMenuOpen((prev) => !prev)}
+              className="p-1.5 text-slate-300 hover:text-white transition-colors"
+              aria-label="Toggle navigation menu"
+              data-testid="mobile-hamburger-button"
+            >
+              {mobileMenuOpen ? <X className="size-6" /> : <Menu className="size-6" />}
+            </button>
+          </div>
         </header>
+
+        {/* Mobile Slide-Over Drawer Menu */}
+        {mobileMenuOpen && (
+          <div className="fixed inset-0 z-50 flex flex-col sm:hidden">
+            {/* Backdrop */}
+            <div
+              className="fixed inset-0 bg-black/75 backdrop-blur-sm transition-opacity"
+              onClick={() => setMobileMenuOpen(false)}
+            />
+
+            {/* Menu Panel */}
+            <div className="relative z-10 flex flex-col w-full max-w-[280px] ml-auto h-full bg-[#11101D] border-l border-white/10 shadow-2xl p-5 overflow-y-auto">
+              {/* Drawer Top */}
+              <div className="flex items-center justify-between pb-4 border-b border-white/10">
+                <LevelStudioLogo
+                  size="sm"
+                  showSubtitle={false}
+                  onClick={() => {
+                    setMobileMenuOpen(false);
+                    startNew();
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="p-1 text-slate-400 hover:text-white"
+                  aria-label="Close menu"
+                >
+                  <X className="size-5" />
+                </button>
+              </div>
+
+              {/* Drawer Links */}
+              <div className="py-4 space-y-1 flex-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMobileMenuOpen(false);
+                    startNew();
+                  }}
+                  className="w-full flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-slate-200 hover:text-white transition text-left"
+                >
+                  <Sparkles className="size-4 text-violet-400 shrink-0" />
+                  <span>New project</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMobileMenuOpen(false);
+                    nav("/workspace");
+                  }}
+                  className="w-full flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-slate-200 hover:text-white transition text-left"
+                  data-testid="mobile-menu-workspace"
+                >
+                  <FolderKanban className="size-4 text-violet-400 shrink-0" />
+                  <span>Workspace</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMobileMenuOpen(false);
+                    nav("/templates");
+                  }}
+                  className="w-full flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-slate-200 hover:text-white transition text-left"
+                  data-testid="mobile-menu-templates"
+                >
+                  <Layout className="size-4 text-violet-400 shrink-0" />
+                  <span>Templates</span>
+                </button>
+
+                <a
+                  href="https://levelup-ecosystem.com"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="w-full block px-3 py-2.5 text-sm font-medium text-slate-300 hover:text-white transition text-left"
+                >
+                  LevelUp Ecosystem
+                </a>
+              </div>
+
+              {/* Drawer Auth & Footer */}
+              <div className="pt-4 border-t border-white/10 space-y-3">
+                {authLoading ? null : user ? (
+                  <>
+                    <div className="flex items-center gap-3 p-2">
+                      {user.picture ? (
+                        <img
+                          src={user.picture}
+                          alt={user.name}
+                          className="size-8 rounded-full border border-white/10 object-cover"
+                        />
+                      ) : (
+                        <span className="grid size-8 place-items-center rounded-full bg-gradient-to-br from-violet-500 to-indigo-600 text-xs font-bold text-white">
+                          {user.name.slice(0, 1).toUpperCase()}
+                        </span>
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs font-semibold text-white truncate">{user.name}</p>
+                        <p className="text-[11px] text-slate-400 truncate">{user.email}</p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMobileMenuOpen(false);
+                        void logout();
+                      }}
+                      className="w-full flex items-center justify-center gap-2 py-2 text-xs font-medium text-red-300 hover:text-red-200 transition"
+                    >
+                      <LogOut className="size-3.5" />
+                      <span>Sign out</span>
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMobileMenuOpen(false);
+                      nav("/login");
+                    }}
+                    className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-violet-600 hover:bg-violet-500 text-xs font-semibold text-white shadow-md shadow-violet-600/30 transition active:scale-[0.98]"
+                    data-testid="mobile-menu-signin"
+                  >
+                    <LogIn className="size-4" />
+                    <span>Sign in</span>
+                  </button>
+                )}
+
+                <p className="pt-2 text-center text-[11px] text-slate-500 leading-tight">
+                  LevelStudio is a free tool by LevelUp Ecosystem.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
 
         {!authLoading && !user && <ReminderBanner />}
 
@@ -343,29 +503,21 @@ export default function HomePage() {
             className="no-scrollbar relative flex min-h-0 flex-1 flex-col overflow-y-auto px-4 pb-14 pt-8 sm:px-6"
             data-testid="hero-section"
           >
-            <div
-              aria-hidden="true"
-              className="pointer-events-none absolute inset-x-0 top-0 h-[480px]"
-              style={{
-                background:
-                  "radial-gradient(ellipse 65% 100% at 50% 0%, rgba(139,92,246,0.18), transparent 70%)",
-              }}
-            />
             <div className="relative mx-auto flex w-full max-w-[860px] flex-col items-center">
               <h1
-                className="text-center font-heading text-[32px] font-bold leading-[1.12] tracking-tight text-white sm:text-[48px]"
+                className="text-center font-heading text-[32px] font-extrabold leading-[1.12] tracking-tight text-white sm:text-[48px]"
                 data-testid="hero-title"
               >
-                What are we building today?
+                See your website before you build it
               </h1>
 
-              <p className="mt-3 max-w-[620px] text-center text-[15px] leading-relaxed text-slate-400 sm:text-[16px]">
-                Describe your business or project. Our senior web architect designs, writes, and builds a complete single-file site with real copy and working interactions.
+              <p className="mt-4 max-w-[720px] text-center text-[15px] leading-relaxed text-slate-300 sm:text-[16px]">
+                LevelStudio is a free website preview tool developed and maintained by LevelUp Ecosystem. Visitors answer a short guided questionnaire about their business, target audience, and preferred aesthetic. In minutes, LevelStudio generates a complete, interactive single-file website draft with production-grade copywriting, working navigation, and real responsive styling. No account or credit card is required to generate a first preview.
               </p>
 
               {template && (
                 <div
-                  className="mt-4 inline-flex items-center gap-2 rounded-full border border-violet-400/40 bg-violet-500/10 px-3.5 py-1 text-[12.5px] text-violet-200"
+                  className="mt-6 inline-flex items-center gap-2 rounded-full border border-violet-400/40 bg-violet-500/10 px-3.5 py-1 text-[12.5px] text-violet-200"
                   data-testid="hero-selected-template-badge"
                 >
                   <Sparkles className="size-3.5 text-violet-400" />
@@ -413,8 +565,44 @@ export default function HomePage() {
                 </div>
               )}
 
+              {/* How it works section */}
+              <section className="mt-16 w-full border-t border-white/8 pt-12 text-left" data-testid="how-it-works-section">
+                <div className="text-center max-w-xl mx-auto mb-8">
+                  <h2 className="text-2xl sm:text-3xl font-bold font-heading text-white">How LevelStudio works</h2>
+                  <p className="mt-2 text-xs sm:text-sm text-slate-400">
+                    From business brief to live working prototype in minutes.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <div className="border-t border-white/10 pt-4">
+                    <span className="text-violet-400 font-mono font-bold text-base block mb-2">01</span>
+                    <h3 className="text-[15px] font-bold text-white font-heading mb-1.5">Answer a few questions</h3>
+                    <p className="text-xs text-slate-400 leading-relaxed">
+                      Describe your trade, target market, and preferred tone through our guided questionnaire or quick composer prompts.
+                    </p>
+                  </div>
+
+                  <div className="border-t border-white/10 pt-4">
+                    <span className="text-violet-400 font-mono font-bold text-base block mb-2">02</span>
+                    <h3 className="text-[15px] font-bold text-white font-heading mb-1.5">See a live preview</h3>
+                    <p className="text-xs text-slate-400 leading-relaxed">
+                      Explore an interactive, high-fidelity draft of your website rendered in real time with working navigation and responsive layout.
+                    </p>
+                  </div>
+
+                  <div className="border-t border-white/10 pt-4">
+                    <span className="text-violet-400 font-mono font-bold text-base block mb-2">03</span>
+                    <h3 className="text-[15px] font-bold text-white font-heading mb-1.5">Request the real build</h3>
+                    <p className="text-xs text-slate-400 leading-relaxed">
+                      Export your single-file source code or transition seamlessly to LevelUp Ecosystem to build, customize, and deploy your production app.
+                    </p>
+                  </div>
+                </div>
+              </section>
+
               {/* Templates gallery */}
-              <div className="mt-14 w-full">
+              <div className="mt-16 w-full">
                 <TemplateGallery
                   selected={template}
                   onSelect={setTemplate}
@@ -423,6 +611,229 @@ export default function HomePage() {
                   limit={isMobile ? 6 : 12}
                 />
               </div>
+
+              {/* Professional Multi-Column Desktop & Mobile Footer */}
+              <footer className="mt-28 w-full border-t border-white/10 pt-16 pb-12 text-slate-400 text-xs" data-testid="landing-footer">
+                <div className="grid grid-cols-1 gap-10 md:grid-cols-5 md:gap-8 pb-12 border-b border-white/10">
+                  {/* Brand & mission column (2 cols on md) */}
+                  <div className="md:col-span-2 space-y-4 text-left">
+                    <LevelStudioLogo size="md" showSubtitle={true} />
+                    <p className="text-slate-400 text-xs leading-relaxed max-w-sm">
+                      LevelStudio is a free website preview tool developed and maintained by LevelUp Ecosystem. Generate instant, interactive single-file website drafts from guided business briefs.
+                    </p>
+                    <div className="pt-2">
+                      <p className="text-xs text-slate-300 font-medium">
+                        LevelStudio is a free tool by{" "}
+                        <a
+                          href="https://levelup-ecosystem.com"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-violet-400 hover:text-violet-300 font-semibold underline underline-offset-4 transition-colors"
+                        >
+                          LevelUp Ecosystem
+                        </a>.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Product Column */}
+                  <div className="border-b border-white/8 pb-3 md:border-b-0 md:pb-0 text-left">
+                    <button
+                      type="button"
+                      onClick={() => toggleFooterSection("product")}
+                      className="w-full flex items-center justify-between py-1 text-xs font-bold uppercase tracking-wider text-white md:cursor-default"
+                      aria-expanded={openFooterSection === "product"}
+                    >
+                      <span>Product</span>
+                      <ChevronDown
+                        className={cn(
+                          "size-4 text-slate-400 transition-transform duration-200 md:hidden",
+                          openFooterSection === "product" && "rotate-180 text-white"
+                        )}
+                      />
+                    </button>
+                    <ul
+                      className={cn(
+                        "space-y-2.5 text-xs text-slate-400 pt-3 md:pt-3",
+                        openFooterSection === "product" ? "block" : "hidden md:block"
+                      )}
+                    >
+                      <li>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            textareaRef.current?.focus();
+                            textareaRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+                          }}
+                          className="hover:text-white transition-colors"
+                        >
+                          Instant Generator
+                        </button>
+                      </li>
+                      <li>
+                        <button
+                          type="button"
+                          onClick={() => nav("/templates")}
+                          className="hover:text-white transition-colors"
+                        >
+                          Starter Templates
+                        </button>
+                      </li>
+                      <li>
+                        <button
+                          type="button"
+                          onClick={() => nav("/workspace")}
+                          className="hover:text-white transition-colors"
+                        >
+                          Workspace
+                        </button>
+                      </li>
+                      <li>
+                        <span className="text-slate-500">Interactive Canvas</span>
+                      </li>
+                      <li>
+                        <span className="text-slate-500">Single-File Code Export</span>
+                      </li>
+                    </ul>
+                  </div>
+
+                  {/* Ecosystem Column */}
+                  <div className="border-b border-white/8 pb-3 md:border-b-0 md:pb-0 text-left">
+                    <button
+                      type="button"
+                      onClick={() => toggleFooterSection("ecosystem")}
+                      className="w-full flex items-center justify-between py-1 text-xs font-bold uppercase tracking-wider text-white md:cursor-default"
+                      aria-expanded={openFooterSection === "ecosystem"}
+                    >
+                      <span>Ecosystem</span>
+                      <ChevronDown
+                        className={cn(
+                          "size-4 text-slate-400 transition-transform duration-200 md:hidden",
+                          openFooterSection === "ecosystem" && "rotate-180 text-white"
+                        )}
+                      />
+                    </button>
+                    <ul
+                      className={cn(
+                        "space-y-2.5 text-xs text-slate-400 pt-3 md:pt-3",
+                        openFooterSection === "ecosystem" ? "block" : "hidden md:block"
+                      )}
+                    >
+                      <li>
+                        <a
+                          href="https://levelup-ecosystem.com"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="hover:text-white transition-colors"
+                        >
+                          LevelUp Ecosystem
+                        </a>
+                      </li>
+                      <li>
+                        <a
+                          href="https://levelup-ecosystem.com"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="hover:text-white transition-colors"
+                        >
+                          Production Web Builds
+                        </a>
+                      </li>
+                      <li>
+                        <a
+                          href="https://levelup-ecosystem.com"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="hover:text-white transition-colors"
+                        >
+                          Enterprise Solutions
+                        </a>
+                      </li>
+                      <li>
+                        <a
+                          href="https://levelup-ecosystem.com"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="hover:text-white transition-colors"
+                        >
+                          Support & Advisory
+                        </a>
+                      </li>
+                    </ul>
+                  </div>
+
+                  {/* Architecture & Legal Column */}
+                  <div className="border-b border-white/8 pb-3 md:border-b-0 md:pb-0 text-left">
+                    <button
+                      type="button"
+                      onClick={() => toggleFooterSection("about")}
+                      className="w-full flex items-center justify-between py-1 text-xs font-bold uppercase tracking-wider text-white md:cursor-default"
+                      aria-expanded={openFooterSection === "about"}
+                    >
+                      <span>About</span>
+                      <ChevronDown
+                        className={cn(
+                          "size-4 text-slate-400 transition-transform duration-200 md:hidden",
+                          openFooterSection === "about" && "rotate-180 text-white"
+                        )}
+                      />
+                    </button>
+                    <ul
+                      className={cn(
+                        "space-y-2.5 text-xs text-slate-400 pt-3 md:pt-3",
+                        openFooterSection === "about" ? "block" : "hidden md:block"
+                      )}
+                    >
+                      <li>
+                        <a
+                          href="/llms.txt"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="hover:text-white transition-colors"
+                        >
+                          llms.txt Specification
+                        </a>
+                      </li>
+                      <li>
+                        <a
+                          href="/sitemap.xml"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="hover:text-white transition-colors"
+                        >
+                          Sitemap
+                        </a>
+                      </li>
+                      <li>
+                        <span className="text-slate-500">No account required for preview</span>
+                      </li>
+                      <li>
+                        <span className="text-slate-500">Client-ready deliverables</span>
+                      </li>
+                    </ul>
+                  </div>
+                </div>
+
+                {/* Bottom Bar */}
+                <div className="mt-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-[11.5px] text-slate-500">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span>© {new Date().getFullYear()} LevelStudio.</span>
+                    <span>All rights reserved.</span>
+                    <span className="hidden sm:inline">·</span>
+                    <span>Built and maintained by LevelUp Ecosystem.</span>
+                  </div>
+                  <div className="flex items-center gap-4 text-slate-400">
+                    <a
+                      href="https://levelup-ecosystem.com"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="hover:text-slate-300 transition-colors"
+                    >
+                      levelup-ecosystem.com
+                    </a>
+                  </div>
+                </div>
+              </footer>
             </div>
           </div>
         ) : (
@@ -446,7 +857,7 @@ export default function HomePage() {
                     ) : (
                       <div className="flex flex-col gap-2">
                         <div className="flex items-center gap-2 text-xs font-semibold text-violet-400">
-                          <Sparkles className="size-3.5" /> Architecte Web LevelUp
+                          <Sparkles className="size-3.5" /> LevelStudio AI Architect
                         </div>
                         <div className="rounded-2xl border border-white/10 bg-[#12111E] p-4 text-sm text-slate-200 shadow-md">
                           <Markdown text={m.text} />

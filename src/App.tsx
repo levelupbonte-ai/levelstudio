@@ -8,6 +8,7 @@ import PreviewPage from "@/pages/preview";
 import AuthCallbackPage from "@/pages/auth-callback";
 import NotFoundPage from "@/pages/not-found/NotFoundPage";
 import PageTransitionLoader from "@/components/PageTransitionLoader";
+import SEOHead from "@/components/SEOHead";
 
 export default function App() {
   const location = useLocation();
@@ -19,6 +20,7 @@ export default function App() {
 
   return (
     <>
+      <SEOHead />
       <PageTransitionLoader />
       <Routes>
         <Route path="/" element={<HomePage />} />

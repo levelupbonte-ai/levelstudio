@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, Check, ExternalLink, Layers, Search, Sparkles, Upload } from "lucide-react";
+import { Check, ExternalLink, FolderKanban, Layers, LogIn, LogOut, Menu, Search, Sparkles, X } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 import { apiGet } from "@/lib/api";
-import ImportTemplate from "@/components/ImportTemplate";
+import { logout, useAuth } from "@/lib/auth";
 import TemplatePreview from "@/components/TemplatePreview";
+import LevelStudioLogo from "@/components/LevelStudioLogo";
 import type { Template } from "@/lib/types";
 
 const FILTERS: { id: string; label: string }[] = [
@@ -94,11 +95,12 @@ function matches(t: Template, q: string): boolean {
 
 export default function TemplatesPage() {
   const nav = useNavigate();
+  const { user, loading: authLoading } = useAuth();
   const { templateId } = useParams<{ templateId?: string }>();
   const [filter, setFilter] = useState("all");
   const [q, setQ] = useState("");
   const [preview, setPreview] = useState<Template | null>(null);
-  const [importOpen, setImportOpen] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const { data: templates = [], isLoading } = useQuery({
     queryKey: ["templates", "all"],
@@ -134,38 +136,219 @@ export default function TemplatesPage() {
 
   return (
     <div className="min-h-dvh w-full bg-[#0A0A0F] text-slate-100 font-sans" data-testid="templates-page">
-      <header className="sticky top-0 z-30 border-b border-white/6 bg-[#0A0A0F]/85 px-4 py-3 backdrop-blur sm:px-6">
+      {/* Top Header matching Studio */}
+      <header
+        className="sticky top-0 z-30 border-b border-white/6 bg-[#0A0A0F]/85 px-4 py-3 backdrop-blur sm:px-6"
+        data-testid="templates-header"
+      >
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
+          <div className="flex min-w-0 items-center gap-3">
             <button
               type="button"
               onClick={() => nav("/")}
-              className="p-1.5 text-slate-400 hover:text-white transition-colors"
-              title="Retour à l'accueil"
-              aria-label="Retour"
-              data-testid="templates-back-button"
+              className="flex items-center gap-2 transition-opacity duration-200 hover:opacity-85 text-left"
+              data-testid="brand-home-button"
             >
-              <ArrowLeft className="size-5" />
+              <LevelStudioLogo size="sm" showSubtitle={true} />
             </button>
-            <div className="flex items-center gap-2">
-              <img src="/favicon.svg" alt="LevelUp" className="size-5 shrink-0" />
-              <span className="font-heading text-[15px] font-semibold text-white">
-                LevelUp<span className="text-violet-400">.Studio</span> Templates
-              </span>
-            </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          {/* Desktop Navigation Links */}
+          <div className="hidden sm:flex shrink-0 items-center gap-2">
             <button
               type="button"
-              onClick={() => setImportOpen(true)}
-              className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-3.5 py-1.5 text-[12px] font-medium text-slate-200 transition-colors hover:border-violet-400/40 hover:bg-white/10 hover:text-white"
+              onClick={() => nav("/")}
+              className="inline-flex items-center gap-1.5 rounded-full border border-white/10 px-3 py-1.5 text-[12.5px] text-slate-300 transition-colors duration-200 hover:border-violet-400/40 hover:text-white"
             >
-              <Upload className="size-3.5 text-violet-400" /> Import template
+              Studio
+            </button>
+
+            <button
+              type="button"
+              className="inline-flex items-center gap-1.5 rounded-full border border-violet-500/50 bg-violet-600/15 px-3 py-1.5 text-[12.5px] font-semibold text-white transition-colors duration-200"
+            >
+              Templates
+            </button>
+
+            <button
+              type="button"
+              onClick={() => nav("/workspace")}
+              className="inline-flex items-center gap-1.5 rounded-full border border-white/10 px-3 py-1.5 text-[12.5px] text-slate-300 transition-colors duration-200 hover:border-violet-400/40 hover:text-white"
+              data-testid="header-workspace-link"
+            >
+              <FolderKanban className="size-3.5 text-violet-400" /> Workspace
+            </button>
+
+            {authLoading ? null : user ? (
+              <div className="flex items-center gap-2 ml-1">
+                {user.picture ? (
+                  <img
+                    src={user.picture}
+                    alt={user.name}
+                    className="size-8 rounded-full border border-white/10 object-cover"
+                    data-testid="user-avatar"
+                  />
+                ) : (
+                  <span
+                    className="grid size-8 place-items-center rounded-full bg-gradient-to-br from-violet-500 to-indigo-600 text-[12px] font-semibold text-white shadow"
+                    data-testid="user-avatar"
+                  >
+                    {user.name.slice(0, 1).toUpperCase()}
+                  </span>
+                )}
+                <button
+                  type="button"
+                  onClick={() => void logout()}
+                  aria-label="Sign out"
+                  className="rounded-full p-1.5 text-slate-400 hover:text-slate-100 transition-colors"
+                  data-testid="logout-button"
+                  title="Sign out"
+                >
+                  <LogOut className="size-4" />
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => nav("/login")}
+                className="inline-flex items-center gap-1.5 rounded-full bg-violet-600 px-3.5 py-1.5 text-[12.5px] font-semibold text-white shadow transition-all hover:bg-violet-500 active:scale-[0.98] ml-1"
+                data-testid="header-signin-button"
+              >
+                <LogIn className="size-3.5" /> Sign in
+              </button>
+            )}
+          </div>
+
+          {/* Mobile Hamburger Button */}
+          <div className="flex sm:hidden items-center">
+            <button
+              type="button"
+              onClick={() => setMobileMenuOpen((prev) => !prev)}
+              className="p-1.5 text-slate-300 hover:text-white transition-colors"
+              aria-label="Toggle navigation menu"
+              data-testid="mobile-hamburger-button"
+            >
+              {mobileMenuOpen ? <X className="size-6" /> : <Menu className="size-6" />}
             </button>
           </div>
         </div>
       </header>
+
+      {/* Mobile Slide-Over Drawer Menu */}
+      {mobileMenuOpen && (
+        <div className="fixed inset-0 z-50 flex flex-col sm:hidden">
+          <div
+            className="fixed inset-0 bg-black/75 backdrop-blur-sm transition-opacity"
+            onClick={() => setMobileMenuOpen(false)}
+          />
+
+          <div className="relative z-10 flex flex-col w-full max-w-[280px] ml-auto h-full bg-[#11101D] border-l border-white/10 shadow-2xl p-5 overflow-y-auto">
+            <div className="flex items-center justify-between pb-4 border-b border-white/10">
+              <LevelStudioLogo size="sm" showSubtitle={false} onClick={() => { setMobileMenuOpen(false); nav("/"); }} />
+              <button
+                type="button"
+                onClick={() => setMobileMenuOpen(false)}
+                className="p-1.5 text-slate-400 hover:text-white transition"
+                aria-label="Close menu"
+              >
+                <X className="size-5" />
+              </button>
+            </div>
+
+            <div className="py-4 space-y-1 flex-1">
+              <button
+                type="button"
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  nav("/");
+                }}
+                className="w-full flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-slate-200 hover:text-white transition text-left"
+              >
+                <Sparkles className="size-4 text-violet-400 shrink-0" />
+                <span>Studio</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setMobileMenuOpen(false)}
+                className="w-full flex items-center gap-3 px-3 py-2.5 text-sm font-semibold text-white bg-violet-600/20 rounded-xl transition text-left"
+              >
+                <Layers className="size-4 text-violet-400 shrink-0" />
+                <span>Templates</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  nav("/workspace");
+                }}
+                className="w-full flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-slate-200 hover:text-white transition text-left"
+              >
+                <FolderKanban className="size-4 text-violet-400 shrink-0" />
+                <span>Workspace</span>
+              </button>
+
+              <a
+                href="https://levelup-ecosystem.com"
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={() => setMobileMenuOpen(false)}
+                className="w-full block px-3 py-2.5 text-sm font-medium text-slate-300 hover:text-white transition text-left"
+              >
+                LevelUp Ecosystem
+              </a>
+            </div>
+
+            <div className="pt-4 border-t border-white/10 space-y-3">
+              {authLoading ? null : user ? (
+                <>
+                  <div className="flex items-center gap-3 p-2">
+                    {user.picture ? (
+                      <img
+                        src={user.picture}
+                        alt={user.name}
+                        className="size-8 rounded-full border border-white/10 object-cover"
+                      />
+                    ) : (
+                      <span className="grid size-8 place-items-center rounded-full bg-gradient-to-br from-violet-500 to-indigo-600 text-xs font-bold text-white">
+                        {user.name.slice(0, 1).toUpperCase()}
+                      </span>
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-semibold text-white truncate">{user.name}</p>
+                      <p className="text-[11px] text-slate-400 truncate">{user.email}</p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMobileMenuOpen(false);
+                      void logout();
+                    }}
+                    className="w-full flex items-center justify-center gap-2 py-2 text-xs font-medium text-red-300 hover:text-red-200 transition"
+                  >
+                    <LogOut className="size-3.5" />
+                    <span>Sign out</span>
+                  </button>
+                </>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMobileMenuOpen(false);
+                    nav("/login");
+                  }}
+                  className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-violet-600 hover:bg-violet-500 text-xs font-semibold text-white shadow-md shadow-violet-600/30 transition active:scale-[0.98]"
+                >
+                  <LogIn className="size-4" />
+                  <span>Sign in</span>
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       <section className="mx-auto max-w-7xl px-4 py-8 sm:px-6 sm:py-12">
         <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
