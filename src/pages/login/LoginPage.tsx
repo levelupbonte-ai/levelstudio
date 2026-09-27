@@ -97,8 +97,12 @@ export default function LoginPage() {
       {/* Main card - dedicated Google sign-in */}
       <main className="relative z-10 mx-auto my-auto w-full max-w-md px-4 py-8">
         <div className="overflow-hidden rounded-3xl border border-white/10 bg-[#12111E] p-8 sm:p-10 shadow-[0_20px_80px_-20px_rgba(139,92,246,0.35)] text-center">
-          <div className="mx-auto mb-4 grid size-12 place-items-center rounded-2xl bg-gradient-to-br from-violet-500 to-indigo-600 shadow-md shadow-violet-500/20">
-            <Sparkles className="size-6 text-white" />
+          <div className="mx-auto mb-5 flex size-16 items-center justify-center rounded-2xl bg-violet-950/40 border border-violet-500/30 shadow-[0_0_25px_rgba(139,92,246,0.25)]">
+            <img
+              src="/favicon.svg"
+              alt="LevelUp Logo"
+              className="size-10 shrink-0 drop-shadow-[0_4px_12px_rgba(139,92,246,0.5)]"
+            />
           </div>
 
           <h1 className="font-heading text-2xl font-bold tracking-tight text-white sm:text-3xl">

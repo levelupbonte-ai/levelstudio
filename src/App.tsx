@@ -6,6 +6,8 @@ import WorkspacePage from "@/pages/workspace";
 import ProjectsPage from "@/pages/projects";
 import PreviewPage from "@/pages/preview";
 import AuthCallbackPage from "@/pages/auth-callback";
+import NotFoundPage from "@/pages/not-found/NotFoundPage";
+import PageTransitionLoader from "@/components/PageTransitionLoader";
 
 export default function App() {
   const location = useLocation();
@@ -16,16 +18,20 @@ export default function App() {
   }
 
   return (
-    <Routes>
-      <Route path="/" element={<HomePage />} />
-      <Route path="/login" element={<LoginPage />} />
-      <Route path="/templates" element={<TemplatesPage />} />
-      <Route path="/templates/:templateId" element={<TemplatesPage />} />
-      <Route path="/workspace" element={<WorkspacePage />} />
-      <Route path="/projects" element={<ProjectsPage />} />
-      <Route path="/preview/:projectId" element={<PreviewPage />} />
-      <Route path="/share/:token" element={<PreviewPage />} />
-      <Route path="/auth/callback" element={<AuthCallbackPage />} />
-    </Routes>
+    <>
+      <PageTransitionLoader />
+      <Routes>
+        <Route path="/" element={<HomePage />} />
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/templates" element={<TemplatesPage />} />
+        <Route path="/templates/:templateId" element={<TemplatesPage />} />
+        <Route path="/workspace" element={<WorkspacePage />} />
+        <Route path="/projects" element={<ProjectsPage />} />
+        <Route path="/preview/:projectId" element={<PreviewPage />} />
+        <Route path="/share/:token" element={<PreviewPage />} />
+        <Route path="/auth/callback" element={<AuthCallbackPage />} />
+        <Route path="*" element={<NotFoundPage />} />
+      </Routes>
+    </>
   );
 }
