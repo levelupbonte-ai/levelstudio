@@ -25,26 +25,48 @@ export default function AuthCallbackPage() {
     ran.current = true;
 
     async function finish() {
+      // 1. Support both search query params and hash params
+      const searchParams = new URLSearchParams(window.location.search);
       const hash = window.location.hash.replace(/^#/, "");
-      const params = new URLSearchParams(hash);
-      const sessionId = params.get("session_id");
+      const hashParams = new URLSearchParams(hash);
 
-      if (!sessionId) {
+      const sessionId = searchParams.get("session_id") || hashParams.get("session_id");
+      const email = searchParams.get("email") || hashParams.get("email");
+      const name = searchParams.get("name") || hashParams.get("name");
+      const picture = searchParams.get("picture") || hashParams.get("picture");
+
+      if (!sessionId && !email) {
         toast.error("Échec de la validation de session");
         nav("/", { replace: true });
         return;
       }
 
       try {
-        const res = await apiPost<HandshakeResult>("/auth/session", {
-          session_id: sessionId,
-        });
+        const payload: Record<string, string> = {};
+        if (sessionId) payload.session_id = sessionId;
+        if (email) payload.email = email;
+        if (name) payload.name = name;
+        if (picture) payload.picture = picture;
+
+        const res = await apiPost<HandshakeResult>("/auth/session", payload);
 
         queryClient.setQueryData(["auth", "me"], res.user);
         void queryClient.invalidateQueries({ queryKey: ["auth", "me"] });
         void queryClient.invalidateQueries({ queryKey: ["projects"] });
 
-        toast.success(`Welcome, ${res.user.name}`);
+        // Broadcast cross-tab session
+        try {
+          localStorage.setItem("levelup_shared_session", JSON.stringify(res.user));
+          if ("BroadcastChannel" in window) {
+            const channel = new BroadcastChannel("levelup_ecosystem_sync");
+            channel.postMessage({ type: "LEVELUP_AUTH", user: res.user });
+            channel.close();
+          }
+        } catch {
+          // ignore
+        }
+
+        toast.success(`Bienvenue, ${res.user.name}`);
         nav("/workspace", { replace: true });
       } catch (err) {
         console.error("Auth callback failed:", err);

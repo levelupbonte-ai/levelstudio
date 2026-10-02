@@ -181,7 +181,13 @@ export default function TemplateGallery({ selected, onSelect, disabled, onSeeAll
                 key={t.id}
                 type="button"
                 disabled={disabled}
-                onClick={() => nav(`/templates/${t.id}`)}
+                onClick={() => {
+                  if (t.kind === "style") {
+                    nav(`/templates/${t.id}`);
+                  } else {
+                    onSelect(selected === t.id ? null : t.id);
+                  }
+                }}
                 className={cn(
                   "group relative aspect-[4/3] w-[240px] shrink-0 snap-start overflow-hidden rounded-xl border transition-[border-color,transform,box-shadow] duration-300 sm:w-[280px]",
                   active ? "border-violet-400/70 shadow-[0_10px_35px_-15px_rgba(139,92,246,0.7)]" : "border-white/8 hover:-translate-y-0.5 hover:border-white/25",

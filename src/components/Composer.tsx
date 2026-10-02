@@ -66,6 +66,7 @@ interface ComposerProps {
   chips?: Chip[];
   onRemoveChip?: (id: string) => void;
   focusRef?: React.RefObject<HTMLTextAreaElement | null>;
+  initialValue?: string;
 }
 
 export default function Composer({
@@ -77,8 +78,15 @@ export default function Composer({
   chips = [],
   onRemoveChip,
   focusRef,
+  initialValue,
 }: ComposerProps) {
-  const [text, setText] = useState("");
+  const [text, setText] = useState(initialValue || "");
+
+  useEffect(() => {
+    if (initialValue !== undefined && initialValue !== null) {
+      setText(initialValue);
+    }
+  }, [initialValue]);
   const [files, setFiles] = useState<Attachment[]>([]);
   const [dragging, setDragging] = useState(false);
   const [focused, setFocused] = useState(false);

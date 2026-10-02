@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
-import { ArrowRight, ChevronDown, ExternalLink, Database, FolderKanban, Globe, Layout, Loader2, LogIn, LogOut, Menu, Sparkles, Wand2, X } from "lucide-react";
+import { ArrowRight, ChevronDown, ExternalLink, Database, FolderKanban, Globe, Layout, Loader2, LogIn, LogOut, Menu, Sparkles, UserPlus, Wand2, X } from "lucide-react";
 import { toast } from "sonner";
 import { Toaster } from "@/components/ui/sonner";
 import BuildProgress from "@/components/BuildProgress";
@@ -58,6 +58,7 @@ export default function HomePage() {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [picked, setPicked] = useState<Service[]>([]);
   const [template, setTemplate] = useState<string | null>(null);
+  const [incomingPrompt, setIncomingPrompt] = useState<string>("");
   const [quotaNotice, setQuotaNotice] = useState<string | null>(null);
   const [loginOpen, setLoginOpen] = useState(false);
   const [loginReason, setLoginReason] = useState<string | undefined>(undefined);
@@ -72,7 +73,7 @@ export default function HomePage() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // Restore a template picked from /templates
+  // Restore session / template picked from /templates and listen to LevelUp Ecosystem
   useEffect(() => {
     try {
       const t = window.sessionStorage.getItem("selected_template");
@@ -97,10 +98,93 @@ export default function HomePage() {
         }
         window.sessionStorage.removeItem("levelup_migrated");
       }
+
+      // 1. URL search params receiver (e.g. ?prompt=...&template=...)
+      const search = new URLSearchParams(window.location.search);
+      const urlPrompt = search.get("prompt");
+      const urlTemplate = search.get("template");
+      const urlService = search.get("service");
+
+      if (urlPrompt) {
+        setIncomingPrompt(urlPrompt);
+        toast.info("Prompt chargé depuis LevelUp Ecosystem");
+      }
+      if (urlTemplate) {
+        setTemplate(urlTemplate);
+      }
+      if (urlService) {
+        const found = ALL_SERVICES.find(
+          (s) => s.id === urlService || s.label.toLowerCase() === urlService.toLowerCase(),
+        );
+        if (found) {
+          setPicked((prev) => (prev.some((p) => p.id === found.id) ? prev : [...prev, found]));
+        }
+      }
+
+      // 2. LocalStorage receiver
+      const storedPrompt = localStorage.getItem("levelup_prompt");
+      if (storedPrompt) {
+        setIncomingPrompt(storedPrompt);
+        localStorage.removeItem("levelup_prompt");
+      }
+      const storedTemplate = localStorage.getItem("levelup_template");
+      if (storedTemplate) {
+        setTemplate(storedTemplate);
+        localStorage.removeItem("levelup_template");
+      }
+
+      // 3. Storage event listener (cross-tab sync with levelup-ecosystem)
+      const handleStorage = (e: StorageEvent) => {
+        if (e.key === "levelup_prompt" && e.newValue) {
+          setIncomingPrompt(e.newValue);
+          toast.info("Prompt synchronisé");
+        }
+        if (e.key === "levelup_template" && e.newValue) {
+          setTemplate(e.newValue);
+        }
+        if (e.key === "levelup_shared_session" && e.newValue) {
+          void qc.invalidateQueries({ queryKey: ["auth", "me"] });
+        }
+      };
+      window.addEventListener("storage", handleStorage);
+
+      // 4. BroadcastChannel listener
+      let bc: BroadcastChannel | null = null;
+      if ("BroadcastChannel" in window) {
+        bc = new BroadcastChannel("levelup_ecosystem_sync");
+        bc.onmessage = (event) => {
+          if (event.data?.type === "LEVELUP_PROMPT" && event.data.prompt) {
+            setIncomingPrompt(event.data.prompt);
+          }
+          if (event.data?.type === "LEVELUP_TEMPLATE" && event.data.templateId) {
+            setTemplate(event.data.templateId);
+          }
+          if (event.data?.type === "LEVELUP_AUTH") {
+            void qc.invalidateQueries({ queryKey: ["auth", "me"] });
+          }
+        };
+      }
+
+      // 5. PostMessage listener
+      const handleMessage = (event: MessageEvent) => {
+        if (event.data?.type === "LEVELUP_PROMPT" && event.data.prompt) {
+          setIncomingPrompt(event.data.prompt);
+        }
+        if (event.data?.type === "LEVELUP_TEMPLATE" && event.data.templateId) {
+          setTemplate(event.data.templateId);
+        }
+      };
+      window.addEventListener("message", handleMessage);
+
+      return () => {
+        window.removeEventListener("storage", handleStorage);
+        window.removeEventListener("message", handleMessage);
+        bc?.close();
+      };
     } catch {
       // ignore
     }
-  }, []);
+  }, [qc]);
 
   const quotaQuery = useQuery({ queryKey: ["quota"], queryFn: () => apiGet<Quota>("/quota") });
 
@@ -246,6 +330,45 @@ export default function HomePage() {
     <div className="flex h-dvh w-full overflow-hidden bg-[#0A0A0F] text-slate-100">
       <Toaster richColors />
       <LoginGate open={loginOpen} onClose={() => setLoginOpen(false)} reason={loginReason} />
+
+      {/* Visual launcher state when AI is being initialized */}
+      {chat.isPending && (
+        <div
+          className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-[#0A0A0F]/85 backdrop-blur-md px-6 text-center animate-in fade-in duration-200"
+          data-testid="ai-launching-screen"
+        >
+          <div className="relative flex flex-col items-center max-w-md w-full p-8 rounded-3xl border border-violet-500/25 bg-[#12111E]/95 shadow-2xl shadow-violet-950/60">
+            {/* Glowing ring & insignia */}
+            <div className="relative mb-6">
+              <div className="absolute -inset-4 rounded-full bg-violet-600/30 blur-xl animate-pulse" />
+              <div className="relative size-16 rounded-2xl bg-gradient-to-tr from-violet-600 to-indigo-600 grid place-items-center text-white shadow-xl shadow-violet-500/30">
+                <LevelStudioIcon className="size-8" />
+              </div>
+            </div>
+
+            <div className="inline-flex items-center gap-2 rounded-full border border-violet-500/30 bg-violet-500/10 px-3.5 py-1 text-[11px] font-semibold text-violet-300 mb-3">
+              <Loader2 className="size-3 animate-spin text-violet-400" />
+              <span>Ouverture du Studio d'Architecture</span>
+            </div>
+
+            <h3 className="font-heading text-xl font-bold text-white tracking-tight">
+              L'IA prépare votre espace de création
+            </h3>
+            <p className="mt-2 text-xs text-slate-400 leading-relaxed max-w-sm">
+              Analyse du brief, configuration du canevas en direct et initialisation de l'architecte web...
+            </p>
+
+            {/* Shimmer progress bar */}
+            <div className="mt-6 w-full h-1.5 rounded-full bg-white/10 overflow-hidden">
+              <div className="h-full bg-gradient-to-r from-violet-500 via-indigo-400 to-violet-500 rounded-full w-full animate-pulse" />
+            </div>
+
+            <span className="mt-4 font-mono text-[10.5px] text-slate-500">
+              LevelUp Ecosystem &middot; Connexion sécurisée
+            </span>
+          </div>
+        </div>
+      )}
 
       <main className="flex min-h-0 min-w-0 flex-1 flex-col">
         {/* Top Header */}
@@ -543,6 +666,7 @@ export default function HomePage() {
                   chips={chips}
                   onRemoveChip={(id) => setPicked((p) => p.filter((x) => x.id !== id))}
                   focusRef={textareaRef}
+                  initialValue={incomingPrompt}
                 />
               </div>
 

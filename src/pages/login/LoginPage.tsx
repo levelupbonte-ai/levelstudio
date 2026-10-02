@@ -105,17 +105,41 @@ export default function LoginPage() {
             </div>
           )}
 
-          <div className="mt-8 flex flex-col gap-4">
+          <div className="mt-8 flex flex-col gap-3">
+            {/* Primary LevelUp Ecosystem SSO */}
+            <a
+              href={`https://levelup-ecosystem.com/login?redirect_uri=${encodeURIComponent(window.location.origin + "/auth/callback")}&source=levelstudio`}
+              className="group relative flex w-full items-center justify-center gap-2.5 rounded-2xl bg-gradient-to-r from-violet-600 via-indigo-600 to-violet-700 px-5 py-3.5 text-sm font-semibold text-white shadow-xl shadow-violet-600/30 transition-all duration-200 hover:opacity-95 hover:shadow-violet-600/40 active:scale-[0.98]"
+            >
+              <LevelStudioIcon className="size-4 shrink-0" />
+              <span>Se connecter via LevelUp Ecosystem</span>
+            </a>
+
+            {/* Signup redirection link */}
+            <a
+              href={`https://levelup-ecosystem.com/signup?redirect_uri=${encodeURIComponent(window.location.origin + "/auth/callback")}&source=levelstudio`}
+              className="flex w-full items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-5 py-3 text-xs font-semibold text-slate-200 transition-colors hover:bg-white/10 hover:text-white"
+            >
+              <span>Créer un compte (Inscription LevelUp)</span>
+            </a>
+
+            <div className="my-2 flex items-center gap-3">
+              <div className="h-px flex-1 bg-white/10" />
+              <span className="text-[11px] uppercase tracking-wider text-slate-500">ou</span>
+              <div className="h-px flex-1 bg-white/10" />
+            </div>
+
+            {/* Direct Google Authentication */}
             <button
               type="button"
               disabled={loading}
               onClick={handleGoogle}
-              className="group relative flex w-full items-center justify-center gap-3 rounded-2xl border border-white/15 bg-white px-5 py-3.5 text-sm font-semibold text-slate-900 shadow-xl transition-all duration-200 hover:bg-slate-100 hover:shadow-violet-500/20 active:scale-[0.98] disabled:opacity-50"
+              className="group relative flex w-full items-center justify-center gap-3 rounded-2xl border border-white/15 bg-white px-5 py-3 text-sm font-semibold text-slate-900 shadow-md transition-all duration-200 hover:bg-slate-100 active:scale-[0.98] disabled:opacity-50"
             >
               {loading ? (
-                <Loader2 className="size-5 animate-spin text-slate-700" />
+                <Loader2 className="size-4 animate-spin text-slate-700" />
               ) : (
-                <svg className="size-5" viewBox="0 0 24 24">
+                <svg className="size-4.5" viewBox="0 0 24 24">
                   <path
                     fill="#4285F4"
                     d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.8-2.4 3.65v3.03h3.88c2.27-2.09 3.665-5.17 3.665-9.12z"
@@ -134,7 +158,7 @@ export default function LoginPage() {
                   />
                 </svg>
               )}
-              <span>{loading ? "Signing in..." : "Continue with Google"}</span>
+              <span>{loading ? "Connexion en cours..." : "Continuer avec Google"}</span>
             </button>
           </div>
 

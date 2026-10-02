@@ -469,17 +469,25 @@ export default function TemplatesPage() {
                 key={t.id}
                 className="group relative flex flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#12111E] shadow-lg transition-all duration-300 hover:-translate-y-1 hover:border-violet-400/50 hover:shadow-xl hover:shadow-violet-500/10"
               >
-                {/* Thumbnail click to preview */}
+                {/* Thumbnail click: Starters directly pick template, Styles allow preview */}
                 <button
                   type="button"
-                  onClick={() => nav(`/templates/${t.id}`)}
+                  onClick={() => (t.kind === "style" ? nav(`/templates/${t.id}`) : pick(t.id))}
                   className="relative aspect-[16/10] w-full overflow-hidden bg-slate-950 text-left cursor-pointer"
-                  title="Click to preview fullscreen"
+                  title={t.kind === "style" ? "Explorer le style visuel" : "Utiliser ce modèle"}
                 >
                   {t.kind === "style" ? <StyleCard t={t} /> : <StarterCard t={t} />}
-                  <div className="absolute inset-0 bg-black/30 opacity-0 transition-opacity group-hover:opacity-100 flex items-center justify-center">
-                    <span className="inline-flex items-center gap-1.5 rounded-full bg-white/90 px-3 py-1 text-xs font-semibold text-slate-900 shadow backdrop-blur">
-                      <ExternalLink className="size-3.5" /> Preview
+                  <div className="absolute inset-0 bg-black/40 opacity-0 transition-opacity group-hover:opacity-100 flex items-center justify-center">
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-violet-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-lg backdrop-blur">
+                      {t.kind === "style" ? (
+                        <>
+                          <ExternalLink className="size-3.5" /> Explorer le style
+                        </>
+                      ) : (
+                        <>
+                          <Check className="size-3.5" /> Utiliser ce modèle
+                        </>
+                      )}
                     </span>
                   </div>
                 </button>
@@ -504,18 +512,20 @@ export default function TemplatesPage() {
                     <button
                       type="button"
                       onClick={() => pick(t.id)}
-                      className="flex-1 rounded-xl bg-violet-600 py-1.5 text-xs font-semibold text-white shadow transition-all hover:bg-violet-500 active:scale-[0.98]"
+                      className="w-full rounded-xl bg-violet-600 py-2 text-xs font-semibold text-white shadow transition-all hover:bg-violet-500 active:scale-[0.98] flex items-center justify-center gap-1.5"
                     >
-                      Use template
+                      <Check className="size-3.5" /> Utiliser ce modèle
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => nav(`/templates/${t.id}`)}
-                      className="rounded-xl border border-white/10 p-1.5 text-slate-400 hover:bg-white/5 hover:text-white"
-                      title="Fullscreen preview"
-                    >
-                      <ExternalLink className="size-3.5" />
-                    </button>
+                    {t.kind === "style" && (
+                      <button
+                        type="button"
+                        onClick={() => nav(`/templates/${t.id}`)}
+                        className="rounded-xl border border-white/10 p-2 text-slate-400 hover:bg-white/5 hover:text-white shrink-0"
+                        title="Détails du style"
+                      >
+                        <ExternalLink className="size-3.5" />
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
