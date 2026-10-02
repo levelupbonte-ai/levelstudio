@@ -1,0 +1,175 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isSuperAdmin() {
+      return isSignedIn() && (
+        request.auth.token.email in [
+          "levelup.bonte@gmail.com",
+          "levelup.ia0@gmail.com",
+          "vonemerci@gmail.com"
+        ] ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    // Default deny all unknown collections
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // 1. Templates collection: starters are public read, auto-seed allowed for valid templates
+    match /templates/{templateId} {
+      allow get, list: if true;
+
+      allow create: if isValidId(templateId) && (
+        isSuperAdmin() ||
+        (
+          request.resource.data.kind in ['starter', 'style'] &&
+          request.resource.data.name is string &&
+          request.resource.data.name.size() > 0 &&
+          request.resource.data.name.size() <= 120 &&
+          request.resource.data['service'] is string &&
+          request.resource.data['service'].size() <= 60 &&
+          (!('html' in request.resource.data) || (request.resource.data.html is string && request.resource.data.html.size() <= 800000))
+        ) ||
+        (
+          isSignedIn() &&
+          request.resource.data.kind == 'import' &&
+          request.resource.data.owner_id == request.auth.uid &&
+          request.resource.data.name is string &&
+          request.resource.data.name.size() > 0 &&
+          request.resource.data.name.size() <= 120 &&
+          (!('html' in request.resource.data) || (request.resource.data.html is string && request.resource.data.html.size() <= 800000))
+        )
+      );
+
+      allow update: if isValidId(templateId) && (
+        isSuperAdmin() ||
+        (
+          isSignedIn() &&
+          resource.data.owner_id == request.auth.uid &&
+          request.resource.data.owner_id == resource.data.owner_id &&
+          request.resource.data.name is string &&
+          request.resource.data.name.size() > 0 &&
+          request.resource.data.name.size() <= 120 &&
+          (!('html' in request.resource.data) || (request.resource.data.html is string && request.resource.data.html.size() <= 800000))
+        )
+      );
+
+      allow delete: if isValidId(templateId) && (
+        isSuperAdmin() ||
+        (isSignedIn() && resource.data.owner_id == request.auth.uid)
+      );
+    }
+
+    // 2. Projects collection: user workspace and AI generated single-page websites
+    match /projects/{projectId} {
+      allow get: if (
+        isSuperAdmin() ||
+        resource.data.user_id == 'global' ||
+        resource.data.share_token != null ||
+        (isSignedIn() && resource.data.user_id == request.auth.uid)
+      );
+
+      allow list: if (
+        isSuperAdmin() ||
+        (isSignedIn() && resource.data.user_id == request.auth.uid) ||
+        resource.data.user_id == 'global'
+      );
+
+      allow create: if isValidId(projectId) && (
+        isSuperAdmin() ||
+        (
+          isSignedIn() &&
+          request.resource.data.user_id == request.auth.uid &&
+          request.resource.data.title is string &&
+          request.resource.data.title.size() <= 200 &&
+          (!('html' in request.resource.data) || request.resource.data.html == null || (request.resource.data.html is string && request.resource.data.html.size() <= 800000))
+        )
+      );
+
+      allow update: if isValidId(projectId) && (
+        isSuperAdmin() ||
+        (
+          isSignedIn() &&
+          resource.data.user_id == request.auth.uid &&
+          request.resource.data.user_id == resource.data.user_id &&
+          request.resource.data.title is string &&
+          request.resource.data.title.size() <= 200 &&
+          (!('html' in request.resource.data) || request.resource.data.html == null || (request.resource.data.html is string && request.resource.data.html.size() <= 800000))
+        )
+      );
+
+      allow delete: if isValidId(projectId) && (
+        isSuperAdmin() ||
+        (isSignedIn() && resource.data.user_id == request.auth.uid)
+      );
+    }
+
+    // 3. Registrations collection: write-only for visitors, read/manage for SuperAdmins
+    match /registrations/{registrationId} {
+      allow get, list, delete: if isSuperAdmin();
+      allow update: if false;
+
+      allow create: if isValidId(registrationId) &&
+        request.resource.data.email is string &&
+        request.resource.data.email.size() > 3 &&
+        request.resource.data.email.size() <= 150 &&
+        request.resource.data.email.matches('^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$') &&
+        (!('name' in request.resource.data) || (request.resource.data.name is string && request.resource.data.name.size() <= 100)) &&
+        (!('message' in request.resource.data) || (request.resource.data.message is string && request.resource.data.message.size() <= 2000)) &&
+        (!('source' in request.resource.data) || (request.resource.data.source is string && request.resource.data.source.size() <= 80)) &&
+        (!('app' in request.resource.data) || request.resource.data.app in ['official_site', 'studio', 'levelstudio']) &&
+        request.resource.data.keys().hasOnly(['id', 'email', 'name', 'message', 'source', 'app', 'created_at', 'status']);
+    }
+
+    // 4. Users collection
+    match /users/{userId} {
+      allow get: if isOwner(userId) || isSuperAdmin() || isSignedIn();
+      allow list: if isSuperAdmin();
+
+      allow create: if isOwner(userId) && (
+        request.resource.data.user_id == request.auth.uid &&
+        request.resource.data.name is string &&
+        request.resource.data.name.size() > 0 &&
+        request.resource.data.name.size() <= 100 &&
+        request.resource.data.email is string &&
+        request.resource.data.email.size() <= 150 &&
+        (!('role' in request.resource.data) || request.resource.data.role in ['architect', 'member'])
+      );
+
+      allow update: if (
+        isSuperAdmin() ||
+        (
+          isOwner(userId) &&
+          request.resource.data.user_id == resource.data.user_id &&
+          (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['role'])) &&
+          request.resource.data.name is string &&
+          request.resource.data.name.size() > 0 &&
+          request.resource.data.name.size() <= 100
+        )
+      );
+
+      allow delete: if isOwner(userId) || isSuperAdmin();
+    }
+
+    // 5. Admins registry
+    match /admins/{adminId} {
+      allow read, write: if isSuperAdmin();
+    }
+  }
+}

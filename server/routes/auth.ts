@@ -62,6 +62,7 @@ function establishSession(user: UserDoc, res: Response): string {
     created_at: new Date().toISOString(),
   });
   db.scheduleSave();
+  void db.syncUserToFirestore(user);
 
   res.cookie(COOKIE_NAME, sessionToken, {
     maxAge: SESSION_DAYS * 24 * 3600 * 1000,

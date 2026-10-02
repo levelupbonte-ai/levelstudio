@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ExternalLink, Globe, Sparkles, LayoutTemplate } from "lucide-react";
+import { ExternalLink, Globe, Layers, LayoutTemplate } from "lucide-react";
 import { toast } from "sonner";
 
 function useIsMobile() {
@@ -39,12 +39,12 @@ export function SiteDeliveryCard({
   const isMobile = useIsMobile();
 
   const defaultSuggestions = [
-    "✨ Add an interactive FAQ & Answers section",
-    "💬 Add a responsive Contact Form",
-    "⭐ Add Client Testimonials & Social Proof",
-    "🎨 Switch to high-contrast Dark Mode",
-    "🚀 Add smooth entrance animations",
-    "📱 Optimize navigation bar for mobile",
+    "Ajouter une section FAQ & Réponses interactives",
+    "Ajouter un formulaire de contact responsive",
+    "Ajouter des avis clients & preuve sociale",
+    "Passer en mode sombre haute densité (Dark Luxe)",
+    "Ajouter des animations d'apparition fluides",
+    "Optimiser la navigation mobile avec menu tiroir",
   ];
 
   const activeSuggestions = suggestions && suggestions.length > 0 ? suggestions : defaultSuggestions;
@@ -104,8 +104,8 @@ export function SiteDeliveryCard({
       {/* Suggested Evolutions Under the Link */}
       <div className="space-y-1.5 pt-1">
         <div className="flex items-center gap-1.5 text-[11px] font-medium text-slate-400">
-          <Sparkles className="size-3 text-violet-400" />
-          <span>Suggestions to refine this site:</span>
+          <Layers className="size-3 text-violet-400" />
+          <span>Orientations architecturales pour enrichir le site :</span>
         </div>
         <div className="flex flex-wrap gap-1.5">
           {activeSuggestions.map((sug, idx) => (

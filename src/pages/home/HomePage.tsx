@@ -520,8 +520,8 @@ export default function HomePage() {
                   className="mt-6 inline-flex items-center gap-2 rounded-full border border-violet-400/40 bg-violet-500/10 px-3.5 py-1 text-[12.5px] text-violet-200"
                   data-testid="hero-selected-template-badge"
                 >
-                  <Sparkles className="size-3.5 text-violet-400" />
-                  <span>Starting from: <strong className="text-white">{template}</strong></span>
+                  <Layout className="size-3.5 text-violet-400" />
+                  <span>Modèle de départ : <strong className="text-white">{template}</strong></span>
                   <button
                     type="button"
                     onClick={() => setTemplate(null)}
@@ -855,11 +855,22 @@ export default function HomePage() {
                         </div>
                       </div>
                     ) : (
-                      <div className="flex flex-col gap-2">
-                        <div className="flex items-center gap-2 text-xs font-semibold text-violet-400">
-                          <Sparkles className="size-3.5" /> LevelStudio AI Architect
+                      <div className="flex flex-col gap-2.5">
+                        <div className="flex items-center justify-between gap-2 px-1">
+                          <div className="flex items-center gap-2">
+                            <div className="size-6 rounded-lg bg-gradient-to-tr from-violet-600 to-indigo-600 grid place-items-center text-white shadow-sm shadow-violet-500/30">
+                              <LevelStudioIcon className="size-3.5" />
+                            </div>
+                            <span className="text-xs font-bold text-white tracking-tight">LevelStudio</span>
+                            <span className="rounded-full bg-violet-500/10 border border-violet-500/25 px-2 py-0.5 text-[10px] font-semibold text-violet-300">
+                              Lead Architecte Web
+                            </span>
+                          </div>
+                          <span className="text-[10px] font-mono text-slate-500">
+                            Certifié LevelUp
+                          </span>
                         </div>
-                        <div className="rounded-2xl border border-white/10 bg-[#12111E] p-4 text-sm text-slate-200 shadow-md">
+                        <div className="rounded-2xl border border-white/10 bg-[#12111E]/95 p-5 text-sm text-slate-200 shadow-xl backdrop-blur-sm">
                           <Markdown text={m.text} />
 
                           {m.kind === "site" && m.html && project && (

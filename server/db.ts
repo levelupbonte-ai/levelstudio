@@ -1,6 +1,39 @@
 import fs from "node:fs";
 import path from "node:path";
+import { initializeApp, getApps } from "firebase/app";
+import {
+  getFirestore,
+  doc,
+  setDoc,
+  getDocs,
+  collection,
+  deleteDoc,
+  type Firestore,
+} from "firebase/firestore";
 import { ALL_TEMPLATES, type TemplateData } from "./templates.ts";
+
+const firebaseConfig = {
+  apiKey:
+    process.env.FIREBASE_API_KEY ||
+    process.env.VITE_FIREBASE_API_KEY ||
+    "AIzaSyBjfhpyDeoSX_-AeOzTgobPLNKqV0DUBQ8",
+  authDomain: process.env.VITE_FIREBASE_AUTH_DOMAIN || "app-levelup-ecosystem.firebaseapp.com",
+  projectId: process.env.VITE_FIREBASE_PROJECT_ID || "app-levelup-ecosystem",
+  storageBucket: process.env.VITE_FIREBASE_STORAGE_BUCKET || "app-levelup-ecosystem.firebasestorage.app",
+  messagingSenderId: process.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "338931284223",
+  appId: process.env.VITE_FIREBASE_APP_ID || "1:338931284223:web:33763b0f82bc98c8eff4ca",
+  measurementId: process.env.VITE_FIREBASE_MEASUREMENT_ID || "G-J73ZNS49L0",
+};
+
+let firestoreDb: Firestore | null = null;
+try {
+  const existing = getApps().find((a) => a.name === "server-firestore");
+  const fbApp = existing || initializeApp(firebaseConfig, "server-firestore");
+  firestoreDb = getFirestore(fbApp);
+  console.log(`[Firebase Firestore] Initialized for project "${firebaseConfig.projectId}"`);
+} catch (err) {
+  console.warn("[Firebase Firestore] Notice during init:", err);
+}
 
 export interface UserDoc {
   user_id: string;
@@ -435,6 +468,7 @@ class PersistentDb {
 
   private saveTimer: NodeJS.Timeout | null = null;
   public initialized = false;
+  private firestoreWriteDisabled = false;
 
   constructor() {
     this.ensureDataDir();
@@ -442,6 +476,9 @@ class PersistentDb {
     this.seedTemplates();
     this.seedDefaultUsersAndProjects();
     this.initialized = true;
+
+    // Asynchronously hydrate from Firestore if reachable
+    void this.syncFromFirestore();
   }
 
   private ensureDataDir() {
@@ -587,6 +624,220 @@ class PersistentDb {
     return count;
   }
 
+  /**
+   * Syncs a project document (including AI generated HTML code and messages) to Firestore
+   */
+  async syncProjectToFirestore(project: ProjectDoc): Promise<void> {
+    if (!firestoreDb || this.firestoreWriteDisabled) return;
+    try {
+      const docRef = doc(firestoreDb, "projects", project.id);
+      const cleanProject: Record<string, any> = {
+        id: project.id,
+        user_id: project.user_id ?? null,
+        title: project.title ?? "New project",
+        style: project.style ?? null,
+        html: project.html ?? null,
+        generating: Boolean(project.generating),
+        progress: project.progress ?? null,
+        progress_step: project.progress_step ?? 0,
+        progress_pct: project.progress_pct ?? 0,
+        progress_focus: project.progress_focus ?? null,
+        template_id: project.template_id ?? null,
+        share_token: project.share_token ?? null,
+        share_expires_at: project.share_expires_at ?? null,
+        messages: (project.messages || []).map((m) => ({
+          id: m.id,
+          role: m.role,
+          kind: m.kind,
+          text: m.text || "",
+          questions: m.questions || [],
+          attachments: (m.attachments || []).map((att) => ({
+            name: att.name,
+            mime: att.mime,
+            kind: att.kind,
+            scan: att.scan,
+          })),
+          site_name: m.site_name ?? null,
+          site_style: m.site_style ?? null,
+          suggestions: m.suggestions || [],
+          html: m.html ?? null,
+          created_at: m.created_at || new Date().toISOString(),
+        })),
+        created_at: project.created_at || new Date().toISOString(),
+        updated_at: project.updated_at || new Date().toISOString(),
+        synced_at: new Date().toISOString(),
+      };
+      await setDoc(docRef, cleanProject, { merge: true });
+      console.log(`[Firebase Firestore] Project ${project.id} ("${project.title}") synced successfully`);
+    } catch (err: any) {
+      const msg = String(err?.message || err || "");
+      if (err?.code === "permission-denied" || msg.includes("PERMISSION_DENIED") || msg.includes("Missing or insufficient permissions")) {
+        this.firestoreWriteDisabled = true;
+        console.warn("[Firebase Firestore] Remote writes restricted by Firestore security rules. Server continuing with high-speed local persistence.");
+      } else {
+        console.warn(`[Firebase Firestore] Note syncing project ${project.id}:`, msg);
+      }
+    }
+  }
+
+  async deleteProjectFromFirestore(projectId: string): Promise<void> {
+    if (!firestoreDb || this.firestoreWriteDisabled) return;
+    try {
+      await deleteDoc(doc(firestoreDb, "projects", projectId));
+      console.log(`[Firebase Firestore] Project ${projectId} deleted from Firestore`);
+    } catch (err: any) {
+      if (err?.code === "permission-denied") {
+        this.firestoreWriteDisabled = true;
+      }
+    }
+  }
+
+  /**
+   * Syncs a template document to Firestore
+   */
+  async syncTemplateToFirestore(template: TemplateData): Promise<void> {
+    if (!firestoreDb || this.firestoreWriteDisabled) return;
+    try {
+      const docRef = doc(firestoreDb, "templates", template.id);
+      const cleanTemplate: Record<string, any> = {
+        id: template.id,
+        name: template.name,
+        tagline: template.tagline || "",
+        best_for: template.best_for || "",
+        service: template.service || "landing",
+        accent: template.accent || "#8b5cf6",
+        kind: template.kind || "starter",
+        palette: template.palette || [],
+        fonts: template.fonts ?? null,
+        sections: template.sections || [],
+        brief_prompt: template.brief_prompt ?? null,
+        owner_id: template.owner_id ?? null,
+        html: template.html || "",
+        created_at: template.created_at || new Date().toISOString(),
+        synced_at: new Date().toISOString(),
+      };
+      await setDoc(docRef, cleanTemplate, { merge: true });
+      console.log(`[Firebase Firestore] Template ${template.id} synced successfully`);
+    } catch (err: any) {
+      const msg = String(err?.message || err || "");
+      if (err?.code === "permission-denied" || msg.includes("PERMISSION_DENIED") || msg.includes("Missing or insufficient permissions")) {
+        this.firestoreWriteDisabled = true;
+        console.warn("[Firebase Firestore] Remote writes restricted by Firestore security rules. Server continuing with high-speed local persistence.");
+      } else {
+        console.warn(`[Firebase Firestore] Note syncing template ${template.id}:`, msg);
+      }
+    }
+  }
+
+  async deleteTemplateFromFirestore(templateId: string): Promise<void> {
+    if (!firestoreDb || this.firestoreWriteDisabled) return;
+    try {
+      await deleteDoc(doc(firestoreDb, "templates", templateId));
+      console.log(`[Firebase Firestore] Template ${templateId} deleted from Firestore`);
+    } catch (err: any) {
+      if (err?.code === "permission-denied") {
+        this.firestoreWriteDisabled = true;
+      }
+    }
+  }
+
+  /**
+   * Syncs user account profile to Firestore
+   */
+  async syncUserToFirestore(user: UserDoc): Promise<void> {
+    if (!firestoreDb || this.firestoreWriteDisabled) return;
+    try {
+      const docRef = doc(firestoreDb, "users", user.user_id);
+      await setDoc(
+        docRef,
+        {
+          user_id: user.user_id,
+          email: user.email,
+          name: user.name,
+          picture: user.picture ?? null,
+          role: user.role || "architect",
+          created_at: user.created_at,
+          synced_at: new Date().toISOString(),
+        },
+        { merge: true },
+      );
+      console.log(`[Firebase Firestore] User ${user.user_id} (${user.email}) synced`);
+    } catch (err: any) {
+      if (err?.code === "permission-denied") {
+        this.firestoreWriteDisabled = true;
+      }
+    }
+  }
+
+  /**
+   * Pulls existing projects, templates, and users from Firestore into memory
+   */
+  async syncFromFirestore(): Promise<void> {
+    if (!firestoreDb) return;
+    try {
+      // 1. Fetch projects
+      const projectsSnap = await getDocs(collection(firestoreDb, "projects"));
+      let projectCount = 0;
+      projectsSnap.forEach((docSnap) => {
+        const data = docSnap.data() as ProjectDoc;
+        if (data && data.id) {
+          const existing = this.projects.get(data.id);
+          if (!existing || new Date(data.updated_at).getTime() >= new Date(existing.updated_at).getTime()) {
+            this.projects.set(data.id, data);
+            projectCount++;
+          }
+        }
+      });
+
+      // 2. Fetch custom templates
+      const templatesSnap = await getDocs(collection(firestoreDb, "templates"));
+      let templateCount = 0;
+      templatesSnap.forEach((docSnap) => {
+        const data = docSnap.data() as TemplateData;
+        if (data && data.id) {
+          this.templates.set(data.id, data);
+          templateCount++;
+        }
+      });
+
+      // 3. Fetch users
+      const usersSnap = await getDocs(collection(firestoreDb, "users"));
+      let userCount = 0;
+      usersSnap.forEach((docSnap) => {
+        const data = docSnap.data() as UserDoc;
+        if (data && data.user_id) {
+          this.users.set(data.user_id, data);
+          if (data.email) {
+            this.usersByEmail.set(data.email.toLowerCase(), data.user_id);
+          }
+          userCount++;
+        }
+      });
+
+      console.log(
+        `[Firebase Firestore] Hydrated ${projectCount} projects, ${templateCount} templates, ${userCount} users from cloud database`,
+      );
+      this.scheduleSave();
+    } catch (err: any) {
+      console.log("[Firebase Firestore] Cloud database read note:", err?.message || err);
+    }
+  }
+
+  /**
+   * Ensures all templates are stored in Firestore for cloud discovery
+   */
+  async syncDefaultTemplatesToFirestore(): Promise<void> {
+    if (!firestoreDb) return;
+    try {
+      for (const t of ALL_TEMPLATES) {
+        await this.syncTemplateToFirestore(t);
+      }
+      console.log(`[Firebase Firestore] Seeded ${ALL_TEMPLATES.length} templates to Firestore database`);
+    } catch (err: any) {
+      console.warn("[Firebase Firestore] Template seeding note:", err?.message || err);
+    }
+  }
+
   getStats() {
     const totalProjects = this.projects.size;
     const completedSites = Array.from(this.projects.values()).filter(p => Boolean(p.html)).length;
@@ -594,7 +845,9 @@ class PersistentDb {
     const totalUsers = this.users.size;
     return {
       status: "connected",
-      storage: "persistent_json_engine",
+      storage: "firebase_firestore_sync",
+      firebase: firestoreDb ? "connected" : "configured",
+      firebaseProject: firebaseConfig.projectId,
       totalProjects,
       completedSites,
       totalTemplates,

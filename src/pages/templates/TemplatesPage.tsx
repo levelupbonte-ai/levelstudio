@@ -1,10 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Check, ExternalLink, FolderKanban, Layers, LogIn, LogOut, Menu, Search, Sparkles, X } from "lucide-react";
+import { Check, Database, ExternalLink, FolderKanban, Layers, Loader2, LogIn, LogOut, Menu, Search, Sparkles, Upload, UserPlus, X } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
+import { collection, getDocs } from "firebase/firestore";
+import { db } from "@/lib/firebase";
 import { apiGet } from "@/lib/api";
 import { logout, useAuth } from "@/lib/auth";
 import TemplatePreview from "@/components/TemplatePreview";
+import ImportTemplate from "@/components/ImportTemplate";
+import RegistrationModal from "@/components/RegistrationModal";
 import LevelStudioLogo from "@/components/LevelStudioLogo";
 import type { Template } from "@/lib/types";
 
@@ -101,10 +105,31 @@ export default function TemplatesPage() {
   const [q, setQ] = useState("");
   const [preview, setPreview] = useState<Template | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
+  const [registrationOpen, setRegistrationOpen] = useState(false);
 
-  const { data: templates = [], isLoading } = useQuery({
-    queryKey: ["templates", "all"],
-    queryFn: () => apiGet<Template[]>("/templates"),
+  const { data: templates = [], isLoading, isFetching } = useQuery({
+    queryKey: ["templates", "firestore"],
+    queryFn: async () => {
+      // 1. Direct query to Firebase Firestore collection 'templates'
+      try {
+        const snap = await getDocs(collection(db, "templates"));
+        if (!snap.empty) {
+          const list: Template[] = [];
+          snap.forEach((docSnap) => {
+            const data = docSnap.data() as Template;
+            if (data && data.id) list.push(data);
+          });
+          if (list.length > 0) {
+            return list;
+          }
+        }
+      } catch (err) {
+        console.debug("[Firestore direct query notice, fallback to API]:", err);
+      }
+      // 2. Fallback to API sync
+      return apiGet<Template[]>("/templates");
+    },
     staleTime: 60 * 1000,
   });
 
@@ -177,6 +202,14 @@ export default function TemplatesPage() {
               data-testid="header-workspace-link"
             >
               <FolderKanban className="size-3.5 text-violet-400" /> Workspace
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setRegistrationOpen(true)}
+              className="inline-flex items-center gap-1.5 rounded-full border border-amber-500/40 bg-amber-500/10 px-3 py-1.5 text-[12.5px] font-semibold text-amber-300 transition-all hover:bg-amber-500/20 hover:border-amber-400"
+            >
+              <UserPlus className="size-3.5 text-amber-400" /> Inscription
             </button>
 
             {authLoading ? null : user ? (
@@ -365,15 +398,25 @@ export default function TemplatesPage() {
             </p>
           </div>
 
-          <div className="relative min-w-[280px]">
-            <Search className="absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-slate-500" />
-            <input
-              type="text"
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              placeholder="Search templates..."
-              className="w-full rounded-full border border-white/10 bg-white/[0.04] py-2 pl-10 pr-4 text-xs text-white placeholder-slate-500 outline-none transition-colors focus:border-violet-500"
-            />
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => setImportOpen(true)}
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-3.5 py-2 text-xs font-semibold text-slate-200 transition-colors hover:border-violet-400/40 hover:text-white"
+            >
+              <Upload className="size-3.5 text-violet-400" />
+              Import
+            </button>
+            <div className="relative min-w-[240px] sm:min-w-[280px]">
+              <Search className="absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-slate-500" />
+              <input
+                type="text"
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+                placeholder="Search templates..."
+                className="w-full rounded-full border border-white/10 bg-white/[0.04] py-2 pl-10 pr-4 text-xs text-white placeholder-slate-500 outline-none transition-colors focus:border-violet-500"
+              />
+            </div>
           </div>
         </div>
 
@@ -398,79 +441,101 @@ export default function TemplatesPage() {
           })}
         </div>
 
-        {/* Visual Cards Grid */}
-        <div className="mt-8 grid gap-5 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
-          {filtered.map((t) => (
-            <div
-              key={t.id}
-              className="group relative flex flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#12111E] shadow-lg transition-all duration-300 hover:-translate-y-1 hover:border-violet-400/50 hover:shadow-xl hover:shadow-violet-500/10"
-            >
-              {/* Thumbnail click to preview */}
-              <button
-                type="button"
-                onClick={() => nav(`/templates/${t.id}`)}
-                className="relative aspect-[16/10] w-full overflow-hidden bg-slate-950 text-left cursor-pointer"
-                title="Click to preview fullscreen"
-              >
-                {t.kind === "style" ? <StyleCard t={t} /> : <StarterCard t={t} />}
-                <div className="absolute inset-0 bg-black/30 opacity-0 transition-opacity group-hover:opacity-100 flex items-center justify-center">
-                  <span className="inline-flex items-center gap-1.5 rounded-full bg-white/90 px-3 py-1 text-xs font-semibold text-slate-900 shadow backdrop-blur">
-                    <ExternalLink className="size-3.5" /> Preview
-                  </span>
-                </div>
-              </button>
+        {/* Loading from Firestore state */}
+        {isLoading && (
+          <div className="mt-12 flex flex-col items-center justify-center text-center p-12 rounded-3xl border border-white/5 bg-[#12111E]/60 shadow-2xl">
+            <div className="relative grid size-16 place-items-center rounded-2xl bg-gradient-to-br from-violet-600 to-indigo-600 shadow-xl shadow-violet-500/25">
+              <Database className="size-8 text-white animate-pulse" />
+              <div className="absolute inset-0 rounded-2xl border border-white/30 animate-ping opacity-25" />
+            </div>
+            <h3 className="mt-5 font-heading text-lg font-bold text-white">
+              Synchronisation avec la base de données Firestore...
+            </h3>
+            <p className="mt-1.5 max-w-md text-xs text-slate-400 leading-relaxed">
+              L'application interroge la collection cloud <span className="font-mono text-violet-300">templates</span> pour charger les modèles d'architecture les plus récents.
+            </p>
+            <div className="mt-4 flex items-center gap-2 text-[11px] text-violet-300 font-mono bg-violet-600/10 px-3 py-1 rounded-full border border-violet-500/20">
+              <Loader2 className="size-3 animate-spin" />
+              <span>Chargement cloud en direct...</span>
+            </div>
+          </div>
+        )}
 
-              {/* Card footer details */}
-              <div className="flex flex-1 flex-col justify-between p-3.5">
-                <div>
-                  <div className="flex items-center justify-between gap-1">
-                    <h3 className="font-heading text-sm font-semibold text-white group-hover:text-violet-200 transition-colors truncate">
-                      {t.name}
-                    </h3>
-                    <span className="shrink-0 rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[9px] font-medium uppercase tracking-wider text-slate-400">
-                      {t.service}
+        {/* Visual Cards Grid */}
+        {!isLoading && (
+          <div className="mt-8 grid gap-5 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+            {filtered.map((t) => (
+              <div
+                key={t.id}
+                className="group relative flex flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#12111E] shadow-lg transition-all duration-300 hover:-translate-y-1 hover:border-violet-400/50 hover:shadow-xl hover:shadow-violet-500/10"
+              >
+                {/* Thumbnail click to preview */}
+                <button
+                  type="button"
+                  onClick={() => nav(`/templates/${t.id}`)}
+                  className="relative aspect-[16/10] w-full overflow-hidden bg-slate-950 text-left cursor-pointer"
+                  title="Click to preview fullscreen"
+                >
+                  {t.kind === "style" ? <StyleCard t={t} /> : <StarterCard t={t} />}
+                  <div className="absolute inset-0 bg-black/30 opacity-0 transition-opacity group-hover:opacity-100 flex items-center justify-center">
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-white/90 px-3 py-1 text-xs font-semibold text-slate-900 shadow backdrop-blur">
+                      <ExternalLink className="size-3.5" /> Preview
                     </span>
                   </div>
-                  <p className="mt-1 text-[11px] text-slate-400 line-clamp-1">
-                    {t.tagline}
-                  </p>
-                </div>
+                </button>
 
-                <div className="mt-3 flex items-center gap-2 pt-2 border-t border-white/5">
-                  <button
-                    type="button"
-                    onClick={() => pick(t.id)}
-                    className="flex-1 rounded-xl bg-violet-600 py-1.5 text-xs font-semibold text-white shadow transition-all hover:bg-violet-500 active:scale-[0.98]"
-                  >
-                    Use template
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => nav(`/templates/${t.id}`)}
-                    className="rounded-xl border border-white/10 p-1.5 text-slate-400 hover:bg-white/5 hover:text-white"
-                    title="Fullscreen preview"
-                  >
-                    <ExternalLink className="size-3.5" />
-                  </button>
+                {/* Card footer details */}
+                <div className="flex flex-1 flex-col justify-between p-3.5">
+                  <div>
+                    <div className="flex items-center justify-between gap-1">
+                      <h3 className="font-heading text-sm font-semibold text-white group-hover:text-violet-200 transition-colors truncate">
+                        {t.name}
+                      </h3>
+                      <span className="shrink-0 rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[9px] font-medium uppercase tracking-wider text-slate-400">
+                        {t.service}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-[11px] text-slate-400 line-clamp-1">
+                      {t.tagline}
+                    </p>
+                  </div>
+
+                  <div className="mt-3 flex items-center gap-2 pt-2 border-t border-white/5">
+                    <button
+                      type="button"
+                      onClick={() => pick(t.id)}
+                      className="flex-1 rounded-xl bg-violet-600 py-1.5 text-xs font-semibold text-white shadow transition-all hover:bg-violet-500 active:scale-[0.98]"
+                    >
+                      Use template
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => nav(`/templates/${t.id}`)}
+                      className="rounded-xl border border-white/10 p-1.5 text-slate-400 hover:bg-white/5 hover:text-white"
+                      title="Fullscreen preview"
+                    >
+                      <ExternalLink className="size-3.5" />
+                    </button>
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
+            ))}
 
-          {filtered.length === 0 && !isLoading && (
-            <div className="col-span-full rounded-2xl border border-white/10 bg-white/[0.02] p-12 text-center text-slate-400">
-              <Search className="mx-auto size-8 text-slate-600 mb-2" />
-              <p className="text-sm">No templates match your search.</p>
-              <button
-                type="button"
-                onClick={() => { setFilter("all"); setQ(""); }}
-                className="mt-3 rounded-full bg-violet-600 px-4 py-1.5 text-xs font-semibold text-white hover:bg-violet-500"
-              >
-                Reset filters
-              </button>
-            </div>
-          )}
-        </div>
+            {filtered.length === 0 && (
+              <div className="col-span-full rounded-2xl border border-white/10 bg-white/[0.02] p-12 text-center text-slate-400">
+                <Search className="mx-auto size-8 text-slate-600 mb-2" />
+                <p className="text-sm">No templates match your search.</p>
+                <button
+                  type="button"
+                  onClick={() => { setFilter("all"); setQ(""); }}
+                  className="mt-3 rounded-full bg-violet-600 px-4 py-1.5 text-xs font-semibold text-white hover:bg-violet-500"
+                >
+                  Reset filters
+                </button>
+              </div>
+            )}
+          </div>
+        )}
       </section>
 
       {preview && (
@@ -488,10 +553,18 @@ export default function TemplatesPage() {
         <ImportTemplate
           open={importOpen}
           onClose={() => setImportOpen(false)}
-          onImported={(t) => {
+          onImported={(t: Template) => {
             setImportOpen(false);
             pick(t.id);
           }}
+        />
+      )}
+
+      {registrationOpen && (
+        <RegistrationModal
+          open={registrationOpen}
+          onClose={() => setRegistrationOpen(false)}
+          source="studio"
         />
       )}
     </div>

@@ -74,6 +74,15 @@ architectRouter.get("/templates", async (req: Request, res: Response) => {
   const user = await getCurrentUser(req);
   const ownerId = user?.user_id || req.cookies?.[ANON_COOKIE];
 
+  // If templates map is not yet hydrated from Firestore, attempt quick hydration
+  if (db.templates.size === 0) {
+    try {
+      await db.syncFromFirestore();
+    } catch {
+      // ignore
+    }
+  }
+
   const service = req.query.service as string | undefined;
   const q = (req.query.q as string | undefined)?.toLowerCase().trim();
 
@@ -110,6 +119,16 @@ architectRouter.get("/templates", async (req: Request, res: Response) => {
   });
 
   res.json(mapped);
+});
+
+// Explicit template seed trigger
+architectRouter.post("/templates/seed", async (_req: Request, res: Response) => {
+  try {
+    await db.syncDefaultTemplatesToFirestore();
+    res.json({ ok: true, count: db.templates.size, message: "Templates synchronized to Firestore database" });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // Template HTML preview
@@ -162,6 +181,8 @@ architectRouter.post(
       };
 
       db.templates.set(id, doc);
+      db.scheduleSave();
+      void db.syncTemplateToFirestore(doc);
 
       const { html, ...rest } = doc;
       res.json(rest);
@@ -183,6 +204,8 @@ architectRouter.delete("/templates/:template_id", async (req: Request, res: Resp
   }
 
   db.templates.delete(req.params.template_id);
+  db.scheduleSave();
+  void db.deleteTemplateFromFirestore(req.params.template_id);
   res.json({ ok: true });
 });
 
@@ -236,6 +259,8 @@ architectRouter.delete("/projects/:project_id", async (req: Request, res: Respon
   }
 
   db.projects.delete(req.params.project_id);
+  db.scheduleSave();
+  void db.deleteProjectFromFirestore(req.params.project_id);
   res.json({ ok: true });
 });
 
@@ -282,6 +307,8 @@ architectRouter.post("/projects/:project_id/stop", async (req: Request, res: Res
     created_at: new Date().toISOString(),
   });
   project.updated_at = new Date().toISOString();
+  db.scheduleSave();
+  void db.syncProjectToFirestore(project);
 
   res.json(project);
 });
@@ -301,6 +328,9 @@ architectRouter.post("/projects/:project_id/share", (req: Request, res: Response
     project.share_token = crypto.randomBytes(16).toString("hex");
     project.share_expires_at = new Date(now + SHARE_DAYS * 24 * 3600 * 1000).toISOString();
   }
+
+  db.scheduleSave();
+  void db.syncProjectToFirestore(project);
 
   const path = `/api/share/${project.share_token}`;
   const base = (process.env.APP_URL || "").replace(/\/+$/, "");
@@ -451,6 +481,8 @@ architectRouter.post("/chat", async (req: Request, res: Response) => {
   project.progress_pct = 1;
   project.progress_focus = STAGE_FOCUS[0];
   project.updated_at = new Date().toISOString();
+  db.scheduleSave();
+  void db.syncProjectToFirestore(project);
 
   // Consume 1 quota unit
   const updatedQuota = getQuota(true);
@@ -542,6 +574,8 @@ function startBackgroundBuild(project: ProjectDoc, baseTemplate: TemplateData | 
       project.progress_pct = 0;
       project.progress_focus = null;
       project.updated_at = new Date().toISOString();
+      db.scheduleSave();
+      void db.syncProjectToFirestore(project);
     })
     .catch((err) => {
       clearInterval(interval);
@@ -568,6 +602,8 @@ function startBackgroundBuild(project: ProjectDoc, baseTemplate: TemplateData | 
       project.progress_pct = 0;
       project.progress_focus = null;
       project.updated_at = new Date().toISOString();
+      db.scheduleSave();
+      void db.syncProjectToFirestore(project);
     });
 }
 
