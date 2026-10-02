@@ -25,7 +25,6 @@ export default function QuestionWizard({ message, busy, onSubmit }: QuestionWiza
   };
   const answered = useMemo(
     () => questions.filter((qq) => answersFor(qq.id).length > 0).length,
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [questions, picked, custom],
   );
   const currentAnswered = q ? answersFor(q.id).length > 0 : false;

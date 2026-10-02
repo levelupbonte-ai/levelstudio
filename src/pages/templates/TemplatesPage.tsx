@@ -109,25 +109,8 @@ export default function TemplatesPage() {
   const [registrationOpen, setRegistrationOpen] = useState(false);
 
   const { data: templates = [], isLoading, isFetching } = useQuery({
-    queryKey: ["templates", "firestore"],
+    queryKey: ["templates", "api"],
     queryFn: async () => {
-      // 1. Direct query to Firebase Firestore collection 'templates'
-      try {
-        const snap = await getDocs(collection(db, "templates"));
-        if (!snap.empty) {
-          const list: Template[] = [];
-          snap.forEach((docSnap) => {
-            const data = docSnap.data() as Template;
-            if (data && data.id) list.push(data);
-          });
-          if (list.length > 0) {
-            return list;
-          }
-        }
-      } catch (err) {
-        console.debug("[Firestore direct query notice, fallback to API]:", err);
-      }
-      // 2. Fallback to API sync
       return apiGet<Template[]>("/templates");
     },
     staleTime: 60 * 1000,

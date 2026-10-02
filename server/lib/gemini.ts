@@ -272,13 +272,19 @@ export class GeminiKeyRotator {
 
         const isRateLimit =
           errMsg.includes("429") ||
+          errMsg.includes("503") ||
           errMsg.includes("RESOURCE_EXHAUSTED") ||
+          errMsg.includes("UNAVAILABLE") ||
+          errMsg.includes("high demand") ||
           errMsg.includes("quota") ||
           errMsg.includes("Rate limit");
 
         const isInvalidKey =
           errMsg.includes("API key not valid") ||
           errMsg.includes("API_KEY_INVALID") ||
+          errMsg.includes("401") ||
+          errMsg.includes("UNAUTHENTICATED") ||
+          errMsg.includes("ACCESS_TOKEN_TYPE_UNSUPPORTED") ||
           errStatus === "INVALID_ARGUMENT";
 
         console.warn(

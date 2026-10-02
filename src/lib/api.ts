@@ -18,12 +18,37 @@ export class ApiError extends Error {
 
 type JsonBody = unknown;
 
+// Stable browser fingerprint (no cookies involved) so quota survives a cache clear.
+let fingerprint: string | null = null;
+function getFingerprint(): string {
+  if (fingerprint) return fingerprint;
+  const n = navigator;
+  const parts = [
+    n.userAgent,
+    n.language,
+    String(n.hardwareConcurrency || 0),
+    String((n as Navigator & { deviceMemory?: number }).deviceMemory || 0),
+    `${screen.width}x${screen.height}x${screen.colorDepth}`,
+    Intl.DateTimeFormat().resolvedOptions().timeZone || "",
+    String(n.maxTouchPoints || 0),
+  ];
+  let h = 0x811c9dc5;
+  for (const ch of parts.join("|")) {
+    h ^= ch.charCodeAt(0);
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  fingerprint = h.toString(16).padStart(8, "0") + parts.join("|").length.toString(16);
+  return fingerprint;
+}
+
 async function request<T>(method: string, path: string, body?: JsonBody): Promise<T> {
   // Auth rides the httpOnly session cookie — send credentials so the server can read it.
+  const headers: Record<string, string> = { "X-Client-FP": getFingerprint() };
+  if (body !== undefined) headers["Content-Type"] = "application/json";
   const res = await fetch(`${BASE}${path}`, {
     method,
     credentials: "include",
-    headers: body === undefined ? undefined : { "Content-Type": "application/json" },
+    headers,
     body: body === undefined ? undefined : JSON.stringify(body),
   });
 

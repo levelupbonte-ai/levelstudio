@@ -19,10 +19,19 @@ export interface Question {
   allow_custom?: boolean;
 }
 
+export interface ActivityEntry {
+  id: string;
+  icon: "brief" | "palette" | "layout" | "code" | "bug" | "check" | "search" | "image";
+  label: string;
+  detail: string;
+  at: string;
+  status: "running" | "done" | "warning";
+}
+
 export interface Message {
   id: string;
   role: "user" | "assistant";
-  kind: "text" | "questions" | "site" | "refusal" | "error" | "analysis";
+  kind: "text" | "questions" | "site" | "refusal" | "error" | "analysis" | "overloaded";
   text: string;
   questions: Question[];
   attachments: Attachment[];
@@ -31,6 +40,8 @@ export interface Message {
   suggestions: string[];
   html: string | null;
   created_at: string;
+  activity?: ActivityEntry[];
+  cta?: { label: string; url: string } | null;
 }
 
 export interface Project {
@@ -44,6 +55,7 @@ export interface Project {
   progress_step: number;
   progress_pct: number;
   progress_focus: string | null;
+  activity?: ActivityEntry[];
   template_id: string | null;
   share_token: string | null;
   share_expires_at: string | null;

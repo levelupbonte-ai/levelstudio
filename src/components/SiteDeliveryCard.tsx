@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
-import { ExternalLink, Globe, Layers, LayoutTemplate } from "lucide-react";
-import { toast } from "sonner";
+import { ArrowUpRight, Globe } from "lucide-react";
 
 function useIsMobile() {
   const [mobile, setMobile] = useState(() => window.innerWidth < 1024);
@@ -22,103 +21,64 @@ interface SiteDeliveryCardProps {
   onRequestChange: (prompt: string) => void;
   onOpenPreview: () => void;
   compact?: boolean;
-  isCanvasVisible?: boolean;
-  onOpenCanvas?: () => void;
 }
 
-export function SiteDeliveryCard({
-  name,
-  style,
-  suggestions = [],
-  messageId,
-  onRequestChange,
-  onOpenPreview,
-  isCanvasVisible = true,
-  onOpenCanvas,
-}: SiteDeliveryCardProps) {
+const DEFAULT_SUGGESTIONS = [
+  "Add a contact form with inline confirmation",
+  "Add a client testimonials section",
+  "Switch to a lighter, editorial palette",
+  "Tighten the mobile navigation",
+];
+
+export function SiteDeliveryCard({ name, style, suggestions = [], projectId, messageId, onRequestChange, onOpenPreview }: SiteDeliveryCardProps) {
   const isMobile = useIsMobile();
-
-  const defaultSuggestions = [
-    "Ajouter une section FAQ & Réponses interactives",
-    "Ajouter un formulaire de contact responsive",
-    "Ajouter des avis clients & preuve sociale",
-    "Passer en mode sombre haute densité (Dark Luxe)",
-    "Ajouter des animations d'apparition fluides",
-    "Optimiser la navigation mobile avec menu tiroir",
-  ];
-
-  const activeSuggestions = suggestions && suggestions.length > 0 ? suggestions : defaultSuggestions;
-
-  const handleOpen = () => {
-    if (isMobile) {
-      onOpenPreview();
-    } else {
-      if (onOpenCanvas) {
-        onOpenCanvas();
-      }
-      toast.success("Site active in Canvas");
-    }
-  };
+  const list = suggestions.length > 0 ? suggestions : DEFAULT_SUGGESTIONS;
 
   return (
-    <div
-      className="mt-3.5 space-y-3"
-      data-testid={`site-delivery-card-${messageId}`}
-    >
-      {/* Sleek Site Link & Access Card */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-2xl border border-violet-500/30 bg-gradient-to-r from-violet-950/40 via-[#151324] to-violet-900/20 shadow-lg shadow-violet-950/40">
-        <div className="flex items-center gap-3 min-w-0">
-          <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-violet-600/30 border border-violet-500/40 text-violet-300 shadow-sm">
-            <Globe className="size-5 text-violet-300" />
+    <div className="space-y-3" data-testid={`site-delivery-card-${messageId}`}>
+      <div className="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/[0.03] p-3">
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="grid size-9 shrink-0 place-items-center rounded-lg border border-white/10 bg-white/[0.04] text-slate-200">
+            <Globe className="size-4" />
           </div>
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2">
-              <span className="flex size-2 rounded-full bg-emerald-400 animate-pulse shrink-0" />
-              <p className="truncate text-sm font-semibold text-white font-heading">
-                {name}
-              </p>
-            </div>
-            <p className="text-[11px] text-slate-400 mt-0.5 truncate">
-              {style || "Interactive generated website draft"}
-            </p>
+          <div className="min-w-0">
+            <p className="truncate text-[13.5px] font-semibold text-white">{name}</p>
+            <p className="truncate text-[11.5px] text-slate-500">{style || "Interactive website draft"}</p>
           </div>
         </div>
-
-        {/* Link / Button */}
-        <button
-          type="button"
-          onClick={handleOpen}
-          className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 px-4 py-2 text-xs font-semibold text-white shadow-md shadow-violet-600/30 transition-all duration-200 active:scale-[0.98]"
-        >
-          <span>
-            {isMobile
-              ? "Open Canvas"
-              : isCanvasVisible
-              ? "Active in Canvas"
-              : "Open in Canvas"}
-          </span>
-          <ExternalLink className="size-3.5" />
-        </button>
+        {isMobile ? (
+          <button
+            type="button"
+            onClick={onOpenPreview}
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-white px-3.5 py-1.5 text-[12px] font-semibold text-[#0B0B0D] hover:bg-slate-200"
+            data-testid="open-preview-btn"
+          >
+            Open preview <ArrowUpRight className="size-3.5" />
+          </button>
+        ) : (
+          <a
+            href={`/api/projects/${projectId}/html`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-white/12 px-3.5 py-1.5 text-[12px] font-medium text-slate-200 hover:border-white/30 hover:text-white"
+            data-testid="open-new-tab-btn"
+          >
+            New tab <ArrowUpRight className="size-3.5" />
+          </a>
+        )}
       </div>
 
-      {/* Suggested Evolutions Under the Link */}
-      <div className="space-y-1.5 pt-1">
-        <div className="flex items-center gap-1.5 text-[11px] font-medium text-slate-400">
-          <Layers className="size-3 text-violet-400" />
-          <span>Orientations architecturales pour enrichir le site :</span>
-        </div>
-        <div className="flex flex-wrap gap-1.5">
-          {activeSuggestions.map((sug, idx) => (
-            <button
-              key={`${sug}-${idx}`}
-              type="button"
-              onClick={() => onRequestChange(sug)}
-              className="inline-flex items-center gap-1 rounded-xl border border-white/10 bg-white/[0.04] px-2.5 py-1 text-xs text-slate-300 hover:text-white hover:border-violet-500/50 hover:bg-violet-600/15 transition-all duration-150 active:scale-95 text-left"
-            >
-              <span>{sug}</span>
-            </button>
-          ))}
-        </div>
+      <div className="flex flex-wrap gap-1.5" data-testid="site-suggestions">
+        {list.slice(0, 4).map((sug, idx) => (
+          <button
+            key={`${sug}-${idx}`}
+            type="button"
+            onClick={() => onRequestChange(sug)}
+            className="rounded-full border border-white/10 px-3 py-1 text-left text-[12px] text-slate-400 transition-colors duration-150 hover:border-white/25 hover:text-white"
+          >
+            {sug}
+          </button>
+        ))}
       </div>
     </div>
   );

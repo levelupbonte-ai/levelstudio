@@ -1,36 +1,28 @@
 import fs from "node:fs";
 import path from "node:path";
-import { initializeApp, getApps } from "firebase/app";
 import {
-  getFirestore,
+  initAdminFirestore,
   doc,
   setDoc,
   getDocs,
   collection,
   deleteDoc,
   type Firestore,
-} from "firebase/firestore";
+} from "./lib/firestore-admin.ts";
 import { ALL_TEMPLATES, type TemplateData } from "./templates.ts";
 
 const firebaseConfig = {
-  apiKey:
-    process.env.FIREBASE_API_KEY ||
-    process.env.VITE_FIREBASE_API_KEY ||
-    "AIzaSyBjfhpyDeoSX_-AeOzTgobPLNKqV0DUBQ8",
-  authDomain: process.env.VITE_FIREBASE_AUTH_DOMAIN || "app-levelup-ecosystem.firebaseapp.com",
   projectId: process.env.VITE_FIREBASE_PROJECT_ID || "app-levelup-ecosystem",
-  storageBucket: process.env.VITE_FIREBASE_STORAGE_BUCKET || "app-levelup-ecosystem.firebasestorage.app",
-  messagingSenderId: process.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "338931284223",
-  appId: process.env.VITE_FIREBASE_APP_ID || "1:338931284223:web:33763b0f82bc98c8eff4ca",
-  measurementId: process.env.VITE_FIREBASE_MEASUREMENT_ID || "G-J73ZNS49L0",
 };
 
 let firestoreDb: Firestore | null = null;
 try {
-  const existing = getApps().find((a) => a.name === "server-firestore");
-  const fbApp = existing || initializeApp(firebaseConfig, "server-firestore");
-  firestoreDb = getFirestore(fbApp);
-  console.log(`[Firebase Firestore] Initialized for project "${firebaseConfig.projectId}"`);
+  firestoreDb = initAdminFirestore();
+  if (firestoreDb) {
+    console.log(`[Firebase Firestore] Admin SDK ready for project "${firebaseConfig.projectId}"`);
+  } else {
+    console.warn("[Firebase Firestore] No service account configured — local persistence only");
+  }
 } catch (err) {
   console.warn("[Firebase Firestore] Notice during init:", err);
 }
@@ -73,10 +65,19 @@ export interface Question {
   allow_custom?: boolean;
 }
 
+export interface ActivityEntry {
+  id: string;
+  icon: "brief" | "palette" | "layout" | "code" | "bug" | "check" | "search" | "image";
+  label: string;
+  detail: string;
+  at: string;
+  status: "running" | "done" | "warning";
+}
+
 export interface Message {
   id: string;
   role: "user" | "assistant";
-  kind: "text" | "questions" | "site" | "refusal" | "error" | "analysis";
+  kind: "text" | "questions" | "site" | "refusal" | "error" | "analysis" | "overloaded";
   text: string;
   questions: Question[];
   attachments: Attachment[];
@@ -85,6 +86,8 @@ export interface Message {
   suggestions: string[];
   html: string | null;
   created_at: string;
+  activity?: ActivityEntry[];
+  cta?: { label: string; url: string } | null;
 }
 
 export interface ProjectDoc {
@@ -98,6 +101,7 @@ export interface ProjectDoc {
   progress_step: number;
   progress_pct: number;
   progress_focus: string | null;
+  activity?: ActivityEntry[];
   template_id: string | null;
   share_token: string | null;
   share_expires_at: string | null;
@@ -601,7 +605,18 @@ class PersistentDb {
     const updated = current + 1;
     this.usage.set(day, updated);
     this.scheduleSave();
+    void this.syncUsageToFirestore(day, updated);
     return updated;
+  }
+
+  async syncUsageToFirestore(key: string, count: number): Promise<void> {
+    if (!firestoreDb || this.firestoreWriteDisabled) return;
+    try {
+      const safeKey = key.replace(/[^a-zA-Z0-9_\-:.]/g, "_").slice(0, 120);
+      await setDoc(doc(firestoreDb, "usage", safeKey), { key, count, updated_at: new Date().toISOString() }, { merge: true });
+    } catch (err: any) {
+      console.warn("[Firebase Firestore] Usage sync note:", err?.message || err);
+    }
   }
 
   migrateAnon(anonId: string, userId: string): number {
@@ -661,6 +676,8 @@ class PersistentDb {
           site_style: m.site_style ?? null,
           suggestions: m.suggestions || [],
           html: m.html ?? null,
+          activity: m.activity || [],
+          cta: m.cta ?? null,
           created_at: m.created_at || new Date().toISOString(),
         })),
         created_at: project.created_at || new Date().toISOString(),
@@ -814,10 +831,25 @@ class PersistentDb {
         }
       });
 
+      // 4. Fetch quota usage counters (anti-fraud: survives restarts and cache clears)
+      const usageSnap = await getDocs(collection(firestoreDb, "usage"));
+      usageSnap.forEach((docSnap) => {
+        const data = docSnap.data() as { key?: string; count?: number };
+        if (data?.key && typeof data.count === "number") {
+          this.usage.set(data.key, Math.max(data.count, this.usage.get(data.key) ?? 0));
+        }
+      });
+
       console.log(
         `[Firebase Firestore] Hydrated ${projectCount} projects, ${templateCount} templates, ${userCount} users from cloud database`,
       );
       this.scheduleSave();
+
+      // Templates live in the database. Seed from code only when the collection is empty.
+      if (templateCount === 0) {
+        console.log("[Firebase Firestore] Templates collection empty — seeding defaults once");
+        await this.syncDefaultTemplatesToFirestore();
+      }
     } catch (err: any) {
       console.log("[Firebase Firestore] Cloud database read note:", err?.message || err);
     }

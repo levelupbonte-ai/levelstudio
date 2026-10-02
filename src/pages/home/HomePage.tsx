@@ -1,42 +1,20 @@
 import { useEffect, useRef, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
-import { ArrowRight, ChevronDown, ExternalLink, Database, FolderKanban, Globe, Layout, Loader2, LogIn, LogOut, Menu, Sparkles, UserPlus, Wand2, X } from "lucide-react";
+import { ArrowUpRight, Layout, LogOut, Menu, X } from "lucide-react";
 import { toast } from "sonner";
 import { Toaster } from "@/components/ui/sonner";
-import BuildProgress from "@/components/BuildProgress";
 import Composer, { type Chip } from "@/components/Composer";
-import LoginGate from "@/components/LoginGate";
-import Markdown from "@/components/Markdown";
-import QuestionWizard from "@/components/QuestionWizard";
-import ReminderBanner from "@/components/ReminderBanner";
-import ServiceRail, { type Service } from "@/components/ServiceRail";
-import SiteDeliveryCard from "@/components/SiteDeliveryCard";
-import InteractiveCanvas from "@/components/InteractiveCanvas";
-import TemplateGallery from "@/components/TemplateGallery";
-import LevelStudioLogo from "@/components/LevelStudioLogo";
+import CreditBadge from "@/components/CreditBadge";
+import HeroIntro from "@/components/HeroIntro";
 import LevelStudioIcon from "@/components/LevelStudioIcon";
-import { cn } from "@/lib/utils";
-import { ApiError, apiDelete, apiGet, apiPost } from "@/lib/api";
+import LevelStudioLogo from "@/components/LevelStudioLogo";
+import LoginGate from "@/components/LoginGate";
+import ServiceRail, { type Service, SERVICES } from "@/components/ServiceRail";
+import TemplateGallery from "@/components/TemplateGallery";
+import { ApiError, apiPost } from "@/lib/api";
 import { logout, useAuth } from "@/lib/auth";
-import type {
-  Attachment,
-  ChatResponse,
-  Message,
-  Project,
-  ProjectSummary,
-  Quota,
-} from "@/lib/types";
-
-function useIsDesktop() {
-  const [wide, setWide] = useState(() => window.innerWidth >= 1024);
-  useEffect(() => {
-    const onResize = () => setWide(window.innerWidth >= 1024);
-    window.addEventListener("resize", onResize);
-    return () => window.removeEventListener("resize", onResize);
-  }, []);
-  return wide;
-}
+import type { Attachment, ChatResponse } from "@/lib/types";
 
 function useIsMobile() {
   const [mobile, setMobile] = useState(() => window.innerWidth < 768);
@@ -48,1051 +26,241 @@ function useIsMobile() {
   return mobile;
 }
 
+const STEPS = [
+  { n: "01", title: "Describe the business", text: "One sentence is enough. Pick a category, attach a brand visual or your current HTML page if you have one." },
+  { n: "02", title: "Answer a few sharp questions", text: "The architect clarifies audience, sections, tone and conversion goal before a single line is written." },
+  { n: "03", title: "Review the interactive draft", text: "A complete, responsive single-file website with working navigation, animations and real copy. Share it or request the production build." },
+];
+
+const FOOTER_LINKS: Array<{ title: string; links: Array<{ label: string; href: string; external?: boolean }> }> = [
+  { title: "Product", links: [{ label: "Start a draft", href: "/" }, { label: "Templates", href: "/templates" }, { label: "Workspace", href: "/workspace" }] },
+  { title: "LevelUp Ecosystem", links: [{ label: "Production builds", href: "https://levelup-ecosystem.com", external: true }, { label: "Contact", href: "https://levelup-ecosystem.com/contact", external: true }] },
+  { title: "Resources", links: [{ label: "llms.txt", href: "/llms.txt", external: true }, { label: "Sitemap", href: "/sitemap.xml", external: true }] },
+];
+
 export default function HomePage() {
   const nav = useNavigate();
-  const isDesktop = useIsDesktop();
   const isMobile = useIsMobile();
   const qc = useQueryClient();
   const { user, loading: authLoading } = useAuth();
 
-  const [activeId, setActiveId] = useState<string | null>(null);
   const [picked, setPicked] = useState<Service[]>([]);
   const [template, setTemplate] = useState<string | null>(null);
-  const [incomingPrompt, setIncomingPrompt] = useState<string>("");
+  const [incomingPrompt, setIncomingPrompt] = useState("");
   const [quotaNotice, setQuotaNotice] = useState<string | null>(null);
   const [loginOpen, setLoginOpen] = useState(false);
-  const [loginReason, setLoginReason] = useState<string | undefined>(undefined);
-  const [mobilePreview, setMobilePreview] = useState<string | null>(null);
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [openFooterSection, setOpenFooterSection] = useState<string | null>(null);
-
-  const toggleFooterSection = (section: string) => {
-    setOpenFooterSection((prev) => (prev === section ? null : section));
-  };
-
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // Restore session / template picked from /templates and listen to LevelUp Ecosystem
+  // Handoff from /templates, /workspace and levelup-ecosystem.com (?prompt=&template=&service=)
   useEffect(() => {
-    try {
-      const t = window.sessionStorage.getItem("selected_template");
-      if (t) {
-        setTemplate(t);
-        window.sessionStorage.removeItem("selected_template");
-      }
-      const openId = window.sessionStorage.getItem("open_project");
-      if (openId) {
-        setActiveId(openId);
-        window.sessionStorage.removeItem("open_project");
-      }
-      const migrated = window.sessionStorage.getItem("levelup_migrated");
-      if (migrated) {
-        const n = parseInt(migrated, 10);
-        if (n > 0) {
-          toast.success(
-            n === 1
-              ? "Welcome — 1 project synced to your account."
-              : `Welcome — ${n} projects synced to your account.`,
-          );
-        }
-        window.sessionStorage.removeItem("levelup_migrated");
-      }
-
-      // 1. URL search params receiver (e.g. ?prompt=...&template=...)
-      const search = new URLSearchParams(window.location.search);
-      const urlPrompt = search.get("prompt");
-      const urlTemplate = search.get("template");
-      const urlService = search.get("service");
-
-      if (urlPrompt) {
-        setIncomingPrompt(urlPrompt);
-        toast.info("Prompt chargé depuis LevelUp Ecosystem");
-      }
-      if (urlTemplate) {
-        setTemplate(urlTemplate);
-      }
-      if (urlService) {
-        const found = ALL_SERVICES.find(
-          (s) => s.id === urlService || s.label.toLowerCase() === urlService.toLowerCase(),
-        );
-        if (found) {
-          setPicked((prev) => (prev.some((p) => p.id === found.id) ? prev : [...prev, found]));
-        }
-      }
-
-      // 2. LocalStorage receiver
-      const storedPrompt = localStorage.getItem("levelup_prompt");
-      if (storedPrompt) {
-        setIncomingPrompt(storedPrompt);
-        localStorage.removeItem("levelup_prompt");
-      }
-      const storedTemplate = localStorage.getItem("levelup_template");
-      if (storedTemplate) {
-        setTemplate(storedTemplate);
-        localStorage.removeItem("levelup_template");
-      }
-
-      // 3. Storage event listener (cross-tab sync with levelup-ecosystem)
-      const handleStorage = (e: StorageEvent) => {
-        if (e.key === "levelup_prompt" && e.newValue) {
-          setIncomingPrompt(e.newValue);
-          toast.info("Prompt synchronisé");
-        }
-        if (e.key === "levelup_template" && e.newValue) {
-          setTemplate(e.newValue);
-        }
-        if (e.key === "levelup_shared_session" && e.newValue) {
-          void qc.invalidateQueries({ queryKey: ["auth", "me"] });
-        }
-      };
-      window.addEventListener("storage", handleStorage);
-
-      // 4. BroadcastChannel listener
-      let bc: BroadcastChannel | null = null;
-      if ("BroadcastChannel" in window) {
-        bc = new BroadcastChannel("levelup_ecosystem_sync");
-        bc.onmessage = (event) => {
-          if (event.data?.type === "LEVELUP_PROMPT" && event.data.prompt) {
-            setIncomingPrompt(event.data.prompt);
-          }
-          if (event.data?.type === "LEVELUP_TEMPLATE" && event.data.templateId) {
-            setTemplate(event.data.templateId);
-          }
-          if (event.data?.type === "LEVELUP_AUTH") {
-            void qc.invalidateQueries({ queryKey: ["auth", "me"] });
-          }
-        };
-      }
-
-      // 5. PostMessage listener
-      const handleMessage = (event: MessageEvent) => {
-        if (event.data?.type === "LEVELUP_PROMPT" && event.data.prompt) {
-          setIncomingPrompt(event.data.prompt);
-        }
-        if (event.data?.type === "LEVELUP_TEMPLATE" && event.data.templateId) {
-          setTemplate(event.data.templateId);
-        }
-      };
-      window.addEventListener("message", handleMessage);
-
-      return () => {
-        window.removeEventListener("storage", handleStorage);
-        window.removeEventListener("message", handleMessage);
-        bc?.close();
-      };
-    } catch {
-      // ignore
+    const ss = window.sessionStorage;
+    const t = ss.getItem("selected_template");
+    if (t) {
+      setTemplate(t);
+      ss.removeItem("selected_template");
     }
-  }, [qc]);
-
-  const quotaQuery = useQuery({ queryKey: ["quota"], queryFn: () => apiGet<Quota>("/quota") });
-
-  const projectsQuery = useQuery({
-    queryKey: ["projects"],
-    queryFn: () => apiGet<ProjectSummary[]>("/projects"),
-    refetchInterval: 10000,
-  });
-
-  const projectQuery = useQuery({
-    queryKey: ["project", activeId],
-    queryFn: () => apiGet<Project>(`/projects/${activeId}`),
-    enabled: Boolean(activeId),
-    refetchInterval: (query) => (query.state.data?.generating ? 1500 : false),
-  });
+    const openId = ss.getItem("open_project");
+    if (openId) {
+      ss.removeItem("open_project");
+      nav(`/studio/${openId}`, { replace: true });
+      return;
+    }
+    const search = new URLSearchParams(window.location.search);
+    const urlPrompt = search.get("prompt") || search.get("brief");
+    const urlTemplate = search.get("template") || search.get("template_id");
+    const urlService = search.get("service");
+    if (urlPrompt) setIncomingPrompt(urlPrompt);
+    if (urlTemplate) setTemplate(urlTemplate);
+    if (urlService) {
+      const found = SERVICES.find((s) => s.id === urlService || s.label.toLowerCase() === urlService.toLowerCase());
+      if (found) setPicked([found]);
+    }
+    const stored = localStorage.getItem("levelup_prompt");
+    if (stored) {
+      setIncomingPrompt(stored);
+      localStorage.removeItem("levelup_prompt");
+    }
+    const onMessage = (event: MessageEvent) => {
+      if (event.data?.type === "LEVELUP_PROMPT" && event.data.prompt) setIncomingPrompt(String(event.data.prompt));
+      if (event.data?.type === "LEVELUP_TEMPLATE" && event.data.templateId) setTemplate(String(event.data.templateId));
+    };
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
+  }, [nav]);
 
   const chat = useMutation({
     mutationFn: (vars: { text: string; attachments: Attachment[] }) =>
-      apiPost<ChatResponse>("/chat", {
-        project_id: activeId,
-        text: vars.text,
-        template_id: template,
-        attachments: vars.attachments,
-      }),
+      apiPost<ChatResponse>("/chat", { project_id: null, text: vars.text, template_id: template, attachments: vars.attachments }),
     onSuccess: (res) => {
-      setPicked([]);
-      setActiveId(res.project.id);
       qc.setQueryData(["project", res.project.id], res.project);
       qc.setQueryData(["quota"], res.quota);
       void qc.invalidateQueries({ queryKey: ["projects"] });
-      void qc.invalidateQueries({ queryKey: ["db-stats"] });
+      nav(`/studio/${res.project.id}`);
     },
     onError: (err) => {
       if (err instanceof ApiError && err.status === 401) {
-        setLoginReason("Sign in to save this website project to your account.");
         setLoginOpen(true);
         return;
       }
+      const detail = err instanceof ApiError && err.body && typeof err.body === "object" ? String((err.body as { detail?: unknown }).detail ?? "") : "";
       if (err instanceof ApiError && err.status === 429) {
-        const detail =
-          err.body && typeof err.body === "object"
-            ? String((err.body as { detail?: unknown }).detail ?? "")
-            : "";
-        setQuotaNotice(detail || "Daily preview generation limit reached.");
+        setQuotaNotice(detail || "Daily generation allowance reached.");
         return;
       }
-      const detail =
-        err instanceof ApiError && err.body && typeof err.body === "object"
-          ? String((err.body as { detail?: unknown }).detail ?? "An unexpected error occurred")
-          : "An unexpected error occurred";
-      toast.error(detail);
+      toast.error(detail || "Something went wrong. Please try again.");
     },
   });
-
-  const stop = useMutation({
-    mutationFn: (id: string) => apiPost<Project>(`/projects/${id}/stop`),
-    onSuccess: (project) => {
-      qc.setQueryData(["project", project.id], project);
-      toast.success("Generation stopped");
-    },
-  });
-
-  const remove = useMutation({
-    mutationFn: (id: string) => apiDelete<{ ok: boolean }>(`/projects/${id}`),
-    onSuccess: (_d, id) => {
-      if (activeId === id) setActiveId(null);
-      void qc.invalidateQueries({ queryKey: ["projects"] });
-      toast.success("Project deleted from database");
-    },
-  });
-
-  const quota = quotaQuery.data ?? null;
-  const outOfQuota = quota ? quota.remaining <= 0 : false;
-  const project = projectQuery.data ?? null;
-  const messages: Message[] = project?.messages ?? [];
-  const generating = Boolean(project?.generating);
-  const busy = chat.isPending || generating;
-  const lastMessage = messages[messages.length - 1];
-  const openQuestions =
-    !generating && lastMessage?.role === "assistant" && lastMessage.kind === "questions"
-      ? lastMessage
-      : null;
-  const lastSite = [...messages].reverse().find((m) => m.kind === "site" && m.html) ?? null;
-  const canvasVisible = isDesktop && (generating || Boolean(lastSite));
-  const fullscreenSite =
-    mobilePreview && messages.find((m) => m.id === mobilePreview && m.kind === "site" && m.html);
-
-  const delivered = useRef<string | null>(null);
-  useEffect(() => {
-    if (!generating && lastMessage?.kind === "site" && delivered.current !== lastMessage.id) {
-      delivered.current = lastMessage.id;
-      toast.success("Website draft generated successfully");
-      void qc.invalidateQueries({ queryKey: ["projects"] });
-      void qc.invalidateQueries({ queryKey: ["db-stats"] });
-    }
-  }, [generating, lastMessage, qc]);
-
-  useEffect(() => {
-    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
-  }, [messages.length, busy, project?.progress_step, openQuestions]);
 
   const send = (text: string, attachments: Attachment[]) => {
-    if (outOfQuota) {
-      setQuotaNotice(
-        "You have reached the daily studio quota. Your existing projects remain saved in your workspace.",
-      );
-      return;
-    }
-    const brief = picked.length
-      ? `Industry category: ${picked.map((p) => p.label).join(", ")}.${text ? `\n${text}` : ""}`
-      : text;
+    const brief = picked.length ? `Industry category: ${picked.map((p) => p.label).join(", ")}.${text ? `\n${text}` : ""}` : text;
     setQuotaNotice(null);
     chat.mutate({ text: brief, attachments });
   };
 
-  const requestChange = (preset?: string) => {
-    if (preset) {
-      send(preset, []);
-      return;
-    }
-    textareaRef.current?.focus();
-  };
-
   const toggleService = (service: Service) => {
-    setPicked((prev) =>
-      prev.some((p) => p.id === service.id)
-        ? prev.filter((p) => p.id !== service.id)
-        : [...prev, service],
-    );
+    setPicked((prev) => (prev.some((p) => p.id === service.id) ? prev.filter((p) => p.id !== service.id) : [...prev, service]));
     textareaRef.current?.focus();
   };
 
   const chips: Chip[] = picked.map((p) => ({ id: p.id, label: p.label }));
-
-  const startNew = () => {
-    setActiveId(null);
-    setPicked([]);
-    setTemplate(null);
-    setQuotaNotice(null);
-  };
+  const navBtn = "inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-[13px] text-slate-300 transition-colors duration-200 hover:bg-white/[0.06] hover:text-white";
 
   return (
-    <div className="flex h-dvh w-full overflow-hidden bg-[#0A0A0F] text-slate-100">
+    <div className="min-h-dvh bg-[#0B0B0D] text-slate-100" data-testid="home-page">
       <Toaster richColors />
-      <LoginGate open={loginOpen} onClose={() => setLoginOpen(false)} reason={loginReason} />
+      <LoginGate open={loginOpen} onClose={() => setLoginOpen(false)} />
 
-      {/* Visual launcher state when AI is being initialized */}
-      {chat.isPending && (
-        <div
-          className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-[#0A0A0F]/85 backdrop-blur-md px-6 text-center animate-in fade-in duration-200"
-          data-testid="ai-launching-screen"
-        >
-          <div className="relative flex flex-col items-center max-w-md w-full p-8 rounded-3xl border border-violet-500/25 bg-[#12111E]/95 shadow-2xl shadow-violet-950/60">
-            {/* Glowing ring & insignia */}
-            <div className="relative mb-6">
-              <div className="absolute -inset-4 rounded-full bg-violet-600/30 blur-xl animate-pulse" />
-              <div className="relative size-16 rounded-2xl bg-gradient-to-tr from-violet-600 to-indigo-600 grid place-items-center text-white shadow-xl shadow-violet-500/30">
-                <LevelStudioIcon className="size-8" />
-              </div>
-            </div>
+      <header className="sticky top-0 z-40 border-b border-white/6 bg-[#0B0B0D]/85 backdrop-blur" data-testid="app-header">
+        <div className="mx-auto flex h-[60px] w-full max-w-[1200px] items-center justify-between px-5 sm:px-8">
+          <LevelStudioLogo size="sm" showSubtitle={false} onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })} />
 
-            <div className="inline-flex items-center gap-2 rounded-full border border-violet-500/30 bg-violet-500/10 px-3.5 py-1 text-[11px] font-semibold text-violet-300 mb-3">
-              <Loader2 className="size-3 animate-spin text-violet-400" />
-              <span>Ouverture du Studio d'Architecture</span>
-            </div>
-
-            <h3 className="font-heading text-xl font-bold text-white tracking-tight">
-              L'IA prépare votre espace de création
-            </h3>
-            <p className="mt-2 text-xs text-slate-400 leading-relaxed max-w-sm">
-              Analyse du brief, configuration du canevas en direct et initialisation de l'architecte web...
-            </p>
-
-            {/* Shimmer progress bar */}
-            <div className="mt-6 w-full h-1.5 rounded-full bg-white/10 overflow-hidden">
-              <div className="h-full bg-gradient-to-r from-violet-500 via-indigo-400 to-violet-500 rounded-full w-full animate-pulse" />
-            </div>
-
-            <span className="mt-4 font-mono text-[10.5px] text-slate-500">
-              LevelUp Ecosystem &middot; Connexion sécurisée
-            </span>
-          </div>
-        </div>
-      )}
-
-      <main className="flex min-h-0 min-w-0 flex-1 flex-col">
-        {/* Top Header */}
-        <header
-          className="flex shrink-0 items-center justify-between gap-3 border-b border-white/6 px-4 py-3 sm:px-6"
-          data-testid="app-header"
-        >
-          <div className="flex min-w-0 items-center gap-3">
-            <button
-              type="button"
-              onClick={startNew}
-              className="flex items-center gap-2 transition-opacity duration-200 hover:opacity-85 text-left"
-              data-testid="brand-home-button"
-            >
-              <LevelStudioLogo size="sm" showSubtitle={true} />
-            </button>
-
-            {project && (
-              <span
-                className="hidden truncate rounded-full border border-white/10 px-3 py-1 text-[12px] text-slate-300 sm:inline-block"
-                data-testid="header-project-title"
-              >
-                {project.title}
-              </span>
-            )}
-          </div>
-
-          {/* Desktop Navigation Links */}
-          <div className="hidden sm:flex shrink-0 items-center gap-2">
-            <button
-              type="button"
-              onClick={() => nav("/templates")}
-              className="inline-flex items-center gap-1.5 rounded-full border border-white/10 px-3 py-1.5 text-[12.5px] text-slate-300 transition-colors duration-200 hover:border-violet-400/40 hover:text-white"
-            >
-              Templates
-            </button>
-
-            <button
-              type="button"
-              onClick={() => nav("/workspace")}
-              className="inline-flex items-center gap-1.5 rounded-full border border-white/10 px-3 py-1.5 text-[12.5px] text-slate-300 transition-colors duration-200 hover:border-violet-400/40 hover:text-white"
-              data-testid="header-workspace-link"
-            >
-              <FolderKanban className="size-3.5 text-violet-400" /> Workspace
-            </button>
-
-            {activeId && (
-              <button
-                type="button"
-                onClick={startNew}
-                className="inline-flex items-center gap-1.5 rounded-full border border-white/10 px-3 py-1.5 text-[12.5px] text-slate-300 transition-colors duration-200 hover:border-violet-400/40 hover:text-white"
-                data-testid="header-new-project-button"
-              >
-                + New
-              </button>
-            )}
-
+          <nav className="hidden items-center gap-1 sm:flex">
+            <button type="button" onClick={() => nav("/templates")} className={navBtn} data-testid="header-templates-link">Templates</button>
+            <button type="button" onClick={() => nav("/workspace")} className={navBtn} data-testid="header-workspace-link">Workspace</button>
+            <a href="https://levelup-ecosystem.com" target="_blank" rel="noopener noreferrer" className={navBtn} data-testid="header-ecosystem-link">
+              LevelUp Ecosystem <ArrowUpRight className="size-3.5" />
+            </a>
+            <CreditBadge className="ml-2" />
             {authLoading ? null : user ? (
-              <div className="flex items-center gap-2">
-                {user.picture ? (
-                  <img
-                    src={user.picture}
-                    alt={user.name}
-                    className="size-8 rounded-full border border-white/10 object-cover"
-                    data-testid="user-avatar"
-                  />
-                ) : (
-                  <span
-                    className="grid size-8 place-items-center rounded-full bg-gradient-to-br from-violet-500 to-indigo-600 text-[12px] font-semibold text-white shadow"
-                    data-testid="user-avatar"
-                  >
-                    {user.name.slice(0, 1).toUpperCase()}
-                  </span>
-                )}
-                <button
-                  type="button"
-                  onClick={() => void logout()}
-                  aria-label="Sign out"
-                  className="rounded-full p-1.5 text-slate-400 hover:text-slate-100 transition-colors"
-                  data-testid="logout-button"
-                  title="Sign out"
-                >
+              <div className="ml-2 flex items-center gap-2">
+                <span className="grid size-8 place-items-center rounded-full border border-white/10 bg-white/[0.05] text-[12px] font-semibold text-white" data-testid="user-avatar">
+                  {user.picture ? <img src={user.picture} alt={user.name} className="size-8 rounded-full object-cover" /> : user.name.slice(0, 1).toUpperCase()}
+                </span>
+                <button type="button" onClick={() => void logout()} className="grid size-8 place-items-center rounded-full text-slate-400 hover:text-white" title="Sign out" data-testid="logout-button">
                   <LogOut className="size-4" />
                 </button>
               </div>
             ) : (
-              <button
-                type="button"
-                onClick={() => nav("/login")}
-                className="inline-flex items-center gap-1.5 rounded-full bg-violet-600 px-3.5 py-1.5 text-[12.5px] font-semibold text-white shadow transition-all hover:bg-violet-500 active:scale-[0.98]"
-                data-testid="header-signin-button"
-              >
-                <LogIn className="size-3.5" /> Sign in
+              <button type="button" onClick={() => nav("/login")} className="ml-2 inline-flex h-8 items-center rounded-full bg-white px-4 text-[13px] font-semibold text-[#0B0B0D] transition-colors hover:bg-slate-200" data-testid="header-signin-button">
+                Sign in
               </button>
             )}
-          </div>
+          </nav>
 
-          {/* Mobile Hamburger Button */}
-          <div className="flex sm:hidden items-center">
-            <button
-              type="button"
-              onClick={() => setMobileMenuOpen((prev) => !prev)}
-              className="p-1.5 text-slate-300 hover:text-white transition-colors"
-              aria-label="Toggle navigation menu"
-              data-testid="mobile-hamburger-button"
-            >
-              {mobileMenuOpen ? <X className="size-6" /> : <Menu className="size-6" />}
-            </button>
-          </div>
-        </header>
+          <button type="button" onClick={() => setMenuOpen((o) => !o)} className="grid size-9 place-items-center text-slate-300 sm:hidden" aria-label="Menu" data-testid="mobile-hamburger-button">
+            {menuOpen ? <X className="size-5" /> : <Menu className="size-5" />}
+          </button>
+        </div>
 
-        {/* Mobile Slide-Over Drawer Menu */}
-        {mobileMenuOpen && (
-          <div className="fixed inset-0 z-50 flex flex-col sm:hidden">
-            {/* Backdrop */}
-            <div
-              className="fixed inset-0 bg-black/75 backdrop-blur-sm transition-opacity"
-              onClick={() => setMobileMenuOpen(false)}
-            />
-
-            {/* Menu Panel */}
-            <div className="relative z-10 flex flex-col w-full max-w-[280px] ml-auto h-full bg-[#11101D] border-l border-white/10 shadow-2xl p-5 overflow-y-auto">
-              {/* Drawer Top */}
-              <div className="flex items-center justify-between pb-4 border-b border-white/10">
-                <LevelStudioLogo
-                  size="sm"
-                  showSubtitle={false}
-                  onClick={() => {
-                    setMobileMenuOpen(false);
-                    startNew();
-                  }}
-                />
-                <button
-                  type="button"
-                  onClick={() => setMobileMenuOpen(false)}
-                  className="p-1 text-slate-400 hover:text-white"
-                  aria-label="Close menu"
-                >
-                  <X className="size-5" />
-                </button>
-              </div>
-
-              {/* Drawer Links */}
-              <div className="py-4 space-y-1 flex-1">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setMobileMenuOpen(false);
-                    startNew();
-                  }}
-                  className="w-full flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-slate-200 hover:text-white transition text-left"
-                >
-                  <Sparkles className="size-4 text-violet-400 shrink-0" />
-                  <span>New project</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    setMobileMenuOpen(false);
-                    nav("/workspace");
-                  }}
-                  className="w-full flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-slate-200 hover:text-white transition text-left"
-                  data-testid="mobile-menu-workspace"
-                >
-                  <FolderKanban className="size-4 text-violet-400 shrink-0" />
-                  <span>Workspace</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    setMobileMenuOpen(false);
-                    nav("/templates");
-                  }}
-                  className="w-full flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-slate-200 hover:text-white transition text-left"
-                  data-testid="mobile-menu-templates"
-                >
-                  <Layout className="size-4 text-violet-400 shrink-0" />
-                  <span>Templates</span>
-                </button>
-
-                <a
-                  href="https://levelup-ecosystem.com"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  onClick={() => setMobileMenuOpen(false)}
-                  className="w-full block px-3 py-2.5 text-sm font-medium text-slate-300 hover:text-white transition text-left"
-                >
-                  LevelUp Ecosystem
-                </a>
-              </div>
-
-              {/* Drawer Auth & Footer */}
-              <div className="pt-4 border-t border-white/10 space-y-3">
-                {authLoading ? null : user ? (
-                  <>
-                    <div className="flex items-center gap-3 p-2">
-                      {user.picture ? (
-                        <img
-                          src={user.picture}
-                          alt={user.name}
-                          className="size-8 rounded-full border border-white/10 object-cover"
-                        />
-                      ) : (
-                        <span className="grid size-8 place-items-center rounded-full bg-gradient-to-br from-violet-500 to-indigo-600 text-xs font-bold text-white">
-                          {user.name.slice(0, 1).toUpperCase()}
-                        </span>
-                      )}
-                      <div className="min-w-0 flex-1">
-                        <p className="text-xs font-semibold text-white truncate">{user.name}</p>
-                        <p className="text-[11px] text-slate-400 truncate">{user.email}</p>
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setMobileMenuOpen(false);
-                        void logout();
-                      }}
-                      className="w-full flex items-center justify-center gap-2 py-2 text-xs font-medium text-red-300 hover:text-red-200 transition"
-                    >
-                      <LogOut className="size-3.5" />
-                      <span>Sign out</span>
-                    </button>
-                  </>
+        {menuOpen && (
+          <div className="border-t border-white/6 bg-[#0B0B0D] px-5 py-4 sm:hidden" data-testid="mobile-menu">
+            <div className="flex flex-col gap-1">
+              <button type="button" onClick={() => nav("/templates")} className="py-2 text-left text-[15px] text-slate-200" data-testid="mobile-menu-templates">Templates</button>
+              <button type="button" onClick={() => nav("/workspace")} className="py-2 text-left text-[15px] text-slate-200" data-testid="mobile-menu-workspace">Workspace</button>
+              <a href="https://levelup-ecosystem.com" target="_blank" rel="noopener noreferrer" className="py-2 text-[15px] text-slate-200">LevelUp Ecosystem</a>
+              <div className="mt-3 flex items-center justify-between">
+                <CreditBadge />
+                {user ? (
+                  <button type="button" onClick={() => void logout()} className="text-[13px] text-slate-400">Sign out</button>
                 ) : (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setMobileMenuOpen(false);
-                      nav("/login");
-                    }}
-                    className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-violet-600 hover:bg-violet-500 text-xs font-semibold text-white shadow-md shadow-violet-600/30 transition active:scale-[0.98]"
-                    data-testid="mobile-menu-signin"
-                  >
-                    <LogIn className="size-4" />
-                    <span>Sign in</span>
-                  </button>
+                  <button type="button" onClick={() => nav("/login")} className="rounded-full bg-white px-4 py-1.5 text-[13px] font-semibold text-[#0B0B0D]" data-testid="mobile-menu-signin">Sign in</button>
                 )}
-
-                <p className="pt-2 text-center text-[11px] text-slate-500 leading-tight">
-                  LevelStudio is a free tool by LevelUp Ecosystem.
-                </p>
               </div>
             </div>
           </div>
         )}
+      </header>
 
-        {!authLoading && !user && <ReminderBanner />}
+      <main className="mx-auto w-full max-w-[1200px] px-5 sm:px-8">
+        <section className="flex flex-col items-center pb-10 pt-16 sm:pt-24" data-testid="hero-section">
+          <HeroIntro />
 
-        {!activeId ? (
-          // ------- Hero + composer + services + gallery -------
-          <div
-            className="no-scrollbar relative flex min-h-0 flex-1 flex-col overflow-y-auto px-4 pb-14 pt-8 sm:px-6"
-            data-testid="hero-section"
-          >
-            <div className="relative mx-auto flex w-full max-w-[860px] flex-col items-center">
-              <h1
-                className="text-center font-heading text-[32px] font-extrabold leading-[1.12] tracking-tight text-white sm:text-[48px]"
-                data-testid="hero-title"
-              >
-                See your website before you build it
-              </h1>
-
-              <p className="mt-4 max-w-[720px] text-center text-[15px] leading-relaxed text-slate-300 sm:text-[16px]">
-                LevelStudio is a free website preview tool developed and maintained by LevelUp Ecosystem. Visitors answer a short guided questionnaire about their business, target audience, and preferred aesthetic. In minutes, LevelStudio generates a complete, interactive single-file website draft with production-grade copywriting, working navigation, and real responsive styling. No account or credit card is required to generate a first preview.
-              </p>
-
-              {template && (
-                <div
-                  className="mt-6 inline-flex items-center gap-2 rounded-full border border-violet-400/40 bg-violet-500/10 px-3.5 py-1 text-[12.5px] text-violet-200"
-                  data-testid="hero-selected-template-badge"
-                >
-                  <Layout className="size-3.5 text-violet-400" />
-                  <span>Modèle de départ : <strong className="text-white">{template}</strong></span>
-                  <button
-                    type="button"
-                    onClick={() => setTemplate(null)}
-                    className="ml-1 text-violet-300 hover:text-white"
-                    aria-label="Remove template"
-                  >
-                    <X className="size-3" />
-                  </button>
-                </div>
-              )}
-
-              {/* Central Composer */}
-              <div className="mt-8 w-full">
-                <Composer
-                  onSend={send}
-                  busy={busy}
-                  disabled={outOfQuota}
-                  hero={true}
-                  chips={chips}
-                  onRemoveChip={(id) => setPicked((p) => p.filter((x) => x.id !== id))}
-                  focusRef={textareaRef}
-                  initialValue={incomingPrompt}
-                />
-              </div>
-
-              {/* Service categories */}
-              <div className="mt-8 w-full max-w-full">
-                <ServiceRail
-                  selected={picked.map((p) => p.id)}
-                  onToggle={toggleService}
-                  disabled={busy}
-                />
-              </div>
-
-              {/* Quota / budget warning */}
-              {quotaNotice && (
-                <div
-                  className="mt-6 w-full rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-center text-xs text-amber-200"
-                  data-testid="quota-notice"
-                >
-                  {quotaNotice}
-                </div>
-              )}
-
-              {/* How it works section */}
-              <section className="mt-16 w-full border-t border-white/8 pt-12 text-left" data-testid="how-it-works-section">
-                <div className="text-center max-w-xl mx-auto mb-8">
-                  <h2 className="text-2xl sm:text-3xl font-bold font-heading text-white">How LevelStudio works</h2>
-                  <p className="mt-2 text-xs sm:text-sm text-slate-400">
-                    From business brief to live working prototype in minutes.
-                  </p>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  <div className="border-t border-white/10 pt-4">
-                    <span className="text-violet-400 font-mono font-bold text-base block mb-2">01</span>
-                    <h3 className="text-[15px] font-bold text-white font-heading mb-1.5">Answer a few questions</h3>
-                    <p className="text-xs text-slate-400 leading-relaxed">
-                      Describe your trade, target market, and preferred tone through our guided questionnaire or quick composer prompts.
-                    </p>
-                  </div>
-
-                  <div className="border-t border-white/10 pt-4">
-                    <span className="text-violet-400 font-mono font-bold text-base block mb-2">02</span>
-                    <h3 className="text-[15px] font-bold text-white font-heading mb-1.5">See a live preview</h3>
-                    <p className="text-xs text-slate-400 leading-relaxed">
-                      Explore an interactive, high-fidelity draft of your website rendered in real time with working navigation and responsive layout.
-                    </p>
-                  </div>
-
-                  <div className="border-t border-white/10 pt-4">
-                    <span className="text-violet-400 font-mono font-bold text-base block mb-2">03</span>
-                    <h3 className="text-[15px] font-bold text-white font-heading mb-1.5">Request the real build</h3>
-                    <p className="text-xs text-slate-400 leading-relaxed">
-                      Export your single-file source code or transition seamlessly to LevelUp Ecosystem to build, customize, and deploy your production app.
-                    </p>
-                  </div>
-                </div>
-              </section>
-
-              {/* Templates gallery */}
-              <div className="mt-16 w-full">
-                <TemplateGallery
-                  selected={template}
-                  onSelect={setTemplate}
-                  disabled={busy}
-                  onSeeAll={() => nav("/templates")}
-                  limit={isMobile ? 6 : 12}
-                />
-              </div>
-
-              {/* Professional Multi-Column Desktop & Mobile Footer */}
-              <footer className="mt-28 w-full border-t border-white/10 pt-16 pb-12 text-slate-400 text-xs" data-testid="landing-footer">
-                <div className="grid grid-cols-1 gap-10 md:grid-cols-5 md:gap-8 pb-12 border-b border-white/10">
-                  {/* Brand & mission column (2 cols on md) */}
-                  <div className="md:col-span-2 space-y-4 text-left">
-                    <LevelStudioLogo size="md" showSubtitle={true} />
-                    <p className="text-slate-400 text-xs leading-relaxed max-w-sm">
-                      LevelStudio is a free website preview tool developed and maintained by LevelUp Ecosystem. Generate instant, interactive single-file website drafts from guided business briefs.
-                    </p>
-                    <div className="pt-2">
-                      <p className="text-xs text-slate-300 font-medium">
-                        LevelStudio is a free tool by{" "}
-                        <a
-                          href="https://levelup-ecosystem.com"
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-violet-400 hover:text-violet-300 font-semibold underline underline-offset-4 transition-colors"
-                        >
-                          LevelUp Ecosystem
-                        </a>.
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Product Column */}
-                  <div className="border-b border-white/8 pb-3 md:border-b-0 md:pb-0 text-left">
-                    <button
-                      type="button"
-                      onClick={() => toggleFooterSection("product")}
-                      className="w-full flex items-center justify-between py-1 text-xs font-bold uppercase tracking-wider text-white md:cursor-default"
-                      aria-expanded={openFooterSection === "product"}
-                    >
-                      <span>Product</span>
-                      <ChevronDown
-                        className={cn(
-                          "size-4 text-slate-400 transition-transform duration-200 md:hidden",
-                          openFooterSection === "product" && "rotate-180 text-white"
-                        )}
-                      />
-                    </button>
-                    <ul
-                      className={cn(
-                        "space-y-2.5 text-xs text-slate-400 pt-3 md:pt-3",
-                        openFooterSection === "product" ? "block" : "hidden md:block"
-                      )}
-                    >
-                      <li>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            textareaRef.current?.focus();
-                            textareaRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
-                          }}
-                          className="hover:text-white transition-colors"
-                        >
-                          Instant Generator
-                        </button>
-                      </li>
-                      <li>
-                        <button
-                          type="button"
-                          onClick={() => nav("/templates")}
-                          className="hover:text-white transition-colors"
-                        >
-                          Starter Templates
-                        </button>
-                      </li>
-                      <li>
-                        <button
-                          type="button"
-                          onClick={() => nav("/workspace")}
-                          className="hover:text-white transition-colors"
-                        >
-                          Workspace
-                        </button>
-                      </li>
-                      <li>
-                        <span className="text-slate-500">Interactive Canvas</span>
-                      </li>
-                      <li>
-                        <span className="text-slate-500">Single-File Code Export</span>
-                      </li>
-                    </ul>
-                  </div>
-
-                  {/* Ecosystem Column */}
-                  <div className="border-b border-white/8 pb-3 md:border-b-0 md:pb-0 text-left">
-                    <button
-                      type="button"
-                      onClick={() => toggleFooterSection("ecosystem")}
-                      className="w-full flex items-center justify-between py-1 text-xs font-bold uppercase tracking-wider text-white md:cursor-default"
-                      aria-expanded={openFooterSection === "ecosystem"}
-                    >
-                      <span>Ecosystem</span>
-                      <ChevronDown
-                        className={cn(
-                          "size-4 text-slate-400 transition-transform duration-200 md:hidden",
-                          openFooterSection === "ecosystem" && "rotate-180 text-white"
-                        )}
-                      />
-                    </button>
-                    <ul
-                      className={cn(
-                        "space-y-2.5 text-xs text-slate-400 pt-3 md:pt-3",
-                        openFooterSection === "ecosystem" ? "block" : "hidden md:block"
-                      )}
-                    >
-                      <li>
-                        <a
-                          href="https://levelup-ecosystem.com"
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="hover:text-white transition-colors"
-                        >
-                          LevelUp Ecosystem
-                        </a>
-                      </li>
-                      <li>
-                        <a
-                          href="https://levelup-ecosystem.com"
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="hover:text-white transition-colors"
-                        >
-                          Production Web Builds
-                        </a>
-                      </li>
-                      <li>
-                        <a
-                          href="https://levelup-ecosystem.com"
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="hover:text-white transition-colors"
-                        >
-                          Enterprise Solutions
-                        </a>
-                      </li>
-                      <li>
-                        <a
-                          href="https://levelup-ecosystem.com"
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="hover:text-white transition-colors"
-                        >
-                          Support & Advisory
-                        </a>
-                      </li>
-                    </ul>
-                  </div>
-
-                  {/* Architecture & Legal Column */}
-                  <div className="border-b border-white/8 pb-3 md:border-b-0 md:pb-0 text-left">
-                    <button
-                      type="button"
-                      onClick={() => toggleFooterSection("about")}
-                      className="w-full flex items-center justify-between py-1 text-xs font-bold uppercase tracking-wider text-white md:cursor-default"
-                      aria-expanded={openFooterSection === "about"}
-                    >
-                      <span>About</span>
-                      <ChevronDown
-                        className={cn(
-                          "size-4 text-slate-400 transition-transform duration-200 md:hidden",
-                          openFooterSection === "about" && "rotate-180 text-white"
-                        )}
-                      />
-                    </button>
-                    <ul
-                      className={cn(
-                        "space-y-2.5 text-xs text-slate-400 pt-3 md:pt-3",
-                        openFooterSection === "about" ? "block" : "hidden md:block"
-                      )}
-                    >
-                      <li>
-                        <a
-                          href="/llms.txt"
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="hover:text-white transition-colors"
-                        >
-                          llms.txt Specification
-                        </a>
-                      </li>
-                      <li>
-                        <a
-                          href="/sitemap.xml"
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="hover:text-white transition-colors"
-                        >
-                          Sitemap
-                        </a>
-                      </li>
-                      <li>
-                        <span className="text-slate-500">No account required for preview</span>
-                      </li>
-                      <li>
-                        <span className="text-slate-500">Client-ready deliverables</span>
-                      </li>
-                    </ul>
-                  </div>
-                </div>
-
-                {/* Bottom Bar */}
-                <div className="mt-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-[11.5px] text-slate-500">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span>© {new Date().getFullYear()} LevelStudio.</span>
-                    <span>All rights reserved.</span>
-                    <span className="hidden sm:inline">·</span>
-                    <span>Built and maintained by LevelUp Ecosystem.</span>
-                  </div>
-                  <div className="flex items-center gap-4 text-slate-400">
-                    <a
-                      href="https://levelup-ecosystem.com"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="hover:text-slate-300 transition-colors"
-                    >
-                      levelup-ecosystem.com
-                    </a>
-                  </div>
-                </div>
-              </footer>
+          {template && (
+            <div className="mt-6 inline-flex items-center gap-2 rounded-full border border-white/12 px-3.5 py-1 text-[12.5px] text-slate-300" data-testid="hero-selected-template-badge">
+              <Layout className="size-3.5 text-slate-400" />
+              <span>Starting from template <strong className="text-white">{template}</strong></span>
+              <button type="button" onClick={() => setTemplate(null)} className="ml-1 text-slate-400 hover:text-white" aria-label="Remove template">
+                <X className="size-3" />
+              </button>
             </div>
-          </div>
-        ) : (
-          // ------- Workspace Split Canvas: Chat / Live preview -------
-          <div className="flex min-h-0 flex-1 overflow-hidden">
-            {/* Chat column */}
-            <div
-              className={`flex flex-col border-r border-white/6 ${
-                canvasVisible ? "w-full lg:w-[480px] xl:w-[540px]" : "w-full max-w-4xl mx-auto"
-              }`}
-            >
-              <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">
-                {messages.map((m) => (
-                  <div key={m.id} className="space-y-3">
-                    {m.role === "user" ? (
-                      <div className="flex justify-end">
-                        <div className="max-w-[85%] rounded-2xl bg-violet-600 px-4 py-3 text-sm text-white shadow-md">
-                          {m.text}
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="flex flex-col gap-2.5">
-                        <div className="flex items-center justify-between gap-2 px-1">
-                          <div className="flex items-center gap-2">
-                            <div className="size-6 rounded-lg bg-gradient-to-tr from-violet-600 to-indigo-600 grid place-items-center text-white shadow-sm shadow-violet-500/30">
-                              <LevelStudioIcon className="size-3.5" />
-                            </div>
-                            <span className="text-xs font-bold text-white tracking-tight">LevelStudio</span>
-                            <span className="rounded-full bg-violet-500/10 border border-violet-500/25 px-2 py-0.5 text-[10px] font-semibold text-violet-300">
-                              Lead Architecte Web
-                            </span>
-                          </div>
-                          <span className="text-[10px] font-mono text-slate-500">
-                            Certifié LevelUp
-                          </span>
-                        </div>
-                        <div className="rounded-2xl border border-white/10 bg-[#12111E]/95 p-5 text-sm text-slate-200 shadow-xl backdrop-blur-sm">
-                          <Markdown text={m.text} />
+          )}
 
-                          {m.kind === "site" && m.html && project && (
-                            <div className="mt-4 border-t border-white/10 pt-4">
-                              <SiteDeliveryCard
-                                html={m.html}
-                                name={m.site_name ?? project.title ?? "Site"}
-                                style={m.site_style}
-                                suggestions={m.suggestions ?? []}
-                                projectId={project.id}
-                                messageId={m.id}
-                                onRequestChange={requestChange}
-                                onOpenPreview={() => (isDesktop ? void 0 : setMobilePreview(m.id))}
-                                compact={isDesktop && m.id === lastSite?.id}
-                              />
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                ))}
-
-                {generating && (
-                  <div className="rounded-2xl border border-violet-500/20 bg-violet-950/20 p-4">
-                    <BuildProgress
-                      step={project?.progress_step ?? 0}
-                      pct={project?.progress_pct ?? 1}
-                      focus={project?.progress_focus}
-                      onStop={() => project && stop.mutate(project.id)}
-                      mode="mobile"
-                    />
-                  </div>
-                )}
+          <div className="mt-10 w-full max-w-[760px]">
+            <Composer onSend={send} busy={chat.isPending} disabled={false} hero chips={chips} onRemoveChip={(id) => setPicked((p) => p.filter((x) => x.id !== id))} focusRef={textareaRef} initialValue={incomingPrompt} />
+            {chat.isPending && (
+              <div className="mt-4 flex items-center justify-center gap-2.5 text-[13px] text-slate-400" data-testid="opening-studio-indicator">
+                <LevelStudioIcon className="size-4 animate-star-spin" />
+                <span>Opening your studio</span>
               </div>
-
-              {/* Bottom input */}
-              <div className="border-t border-white/6 p-4">
-                {openQuestions && (
-                  <div className="mb-3">
-                    <QuestionWizard
-                      message={openQuestions}
-                      busy={busy}
-                      onSubmit={(answer) => send(answer, [])}
-                    />
-                  </div>
-                )}
-                <Composer
-                  onSend={send}
-                  onStop={() => project && stop.mutate(project.id)}
-                  busy={busy}
-                  disabled={outOfQuota}
-                  hero={false}
-                  focusRef={textareaRef}
-                />
-              </div>
-            </div>
-
-            {/* Desktop Live Canvas */}
-            {canvasVisible && project && (
-              <div className="hidden flex-1 flex-col overflow-hidden bg-[#0A0A0F] lg:flex p-3">
-                <InteractiveCanvas
-                  project={project}
-                  html={lastSite?.html || project.html || null}
-                  title={project.title || "Interactive Canvas - My Sites & Shortcuts"}
-                  isGenerating={generating}
-                  progressStep={project.progress_step ?? 0}
-                  progressPct={project.progress_pct ?? 1}
-                  progressStatus={project.progress}
-                  onTitleChange={(newTitle) => {
-                    project.title = newTitle;
-                    qc.setQueryData(["project", project.id], { ...project });
-                  }}
-                  onClose={() => setActiveId(null)}
-                  onRequestChange={() => requestChange()}
-                />
+            )}
+            {quotaNotice && (
+              <div className="mt-4 rounded-xl border border-amber-400/30 bg-amber-400/10 p-4 text-center text-[13px] text-amber-100" data-testid="quota-notice">
+                {quotaNotice}
               </div>
             )}
           </div>
-        )}
+
+          <div className="mt-8 w-full max-w-[860px]">
+            <ServiceRail selected={picked.map((p) => p.id)} onToggle={toggleService} disabled={chat.isPending} />
+          </div>
+        </section>
+
+        <section className="grid gap-10 border-t border-white/6 py-20 md:grid-cols-3" data-testid="how-it-works-section">
+          {STEPS.map((s) => (
+            <div key={s.n}>
+              <span className="font-mono text-[12px] text-slate-500">{s.n}</span>
+              <h3 className="mt-3 font-heading text-[17px] font-semibold text-white">{s.title}</h3>
+              <p className="mt-2 text-[14px] leading-relaxed text-slate-400">{s.text}</p>
+            </div>
+          ))}
+        </section>
+
+        <section className="border-t border-white/6 py-16" data-testid="templates-section">
+          <TemplateGallery selected={template} onSelect={setTemplate} disabled={chat.isPending} onSeeAll={() => nav("/templates")} limit={isMobile ? 6 : 12} />
+        </section>
       </main>
 
-      {/* Mobile Fullscreen Preview Modal */}
-      {fullscreenSite && fullscreenSite.html && project && (
-        <div className="fixed inset-0 z-50 flex flex-col bg-black p-2 sm:p-4">
-          <InteractiveCanvas
-            project={project}
-            html={fullscreenSite.html}
-            title={fullscreenSite.site_name ?? project.title ?? "Interactive Canvas"}
-            isGenerating={false}
-            onClose={() => setMobilePreview(null)}
-            onRequestChange={() => {
-              setMobilePreview(null);
-              requestChange();
-            }}
-          />
+      <footer className="border-t border-white/6 bg-[#0A0A0B]" data-testid="landing-footer">
+        <div className="mx-auto grid w-full max-w-[1200px] gap-12 px-5 py-16 sm:px-8 md:grid-cols-[1.6fr_1fr_1fr_1fr]">
+          <div>
+            <LevelStudioLogo size="md" showSubtitle={false} />
+            <p className="mt-4 max-w-sm text-[14px] leading-relaxed text-slate-400">
+              The website preview studio of LevelUp Ecosystem. Describe, answer, review — then hand the draft to our team for production.
+            </p>
+          </div>
+          {FOOTER_LINKS.map((col) => (
+            <div key={col.title}>
+              <p className="text-[12px] font-semibold uppercase tracking-[0.16em] text-slate-500">{col.title}</p>
+              <ul className="mt-4 space-y-2.5">
+                {col.links.map((l) => (
+                  <li key={l.label}>
+                    {l.external ? (
+                      <a href={l.href} target="_blank" rel="noopener noreferrer" className="text-[14px] text-slate-300 transition-colors hover:text-white">{l.label}</a>
+                    ) : (
+                      <button type="button" onClick={() => nav(l.href)} className="text-[14px] text-slate-300 transition-colors hover:text-white">{l.label}</button>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
         </div>
-      )}
+        <div className="mx-auto flex w-full max-w-[1200px] flex-col gap-2 px-5 pb-10 text-[12.5px] text-slate-500 sm:flex-row sm:items-center sm:justify-between sm:px-8">
+          <span>© {new Date().getFullYear()} LevelStudio · LevelUp Ecosystem</span>
+          <a href="https://levelup-ecosystem.com" target="_blank" rel="noopener noreferrer" className="hover:text-slate-300">levelup-ecosystem.com</a>
+        </div>
+      </footer>
     </div>
   );
 }

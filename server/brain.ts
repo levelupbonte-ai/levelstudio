@@ -1,94 +1,105 @@
 import type { TemplateData } from "./templates.ts";
-import { ALL_TEMPLATES } from "./templates.ts";
-import { hardenImages } from "./html-utils.ts";
 import { geminiRotator } from "./lib/gemini.ts";
 
-export const DESIGN_DNA = [
-  "Dark Luxe — obsidian surfaces, gold or violet accents, huge serif display, slow reveals",
-  "Swiss Editorial — strict grid, oversized type, generous white space, thin rules",
-  "Glassmorphism Aurora — blurred translucent panels over animated mesh gradients",
-  "Chic Brutalism — hard borders, raw blocks, offset shadows, one screaming accent",
-  "Neo-Retro Print — warm paper tones, textured noise, condensed headlines",
-  "Cyber Neon — near-black canvas, neon gradients, glow borders, mono labels",
-  "Organic Soft — rounded shapes, pastel duotones, blob backgrounds, friendly copy",
-  "Corporate Precision — navy and steel, data cards, crisp icons, confident hierarchy",
-];
-
-export const FONT_PAIRS = [
-  "Playfair Display + Inter",
-  "Space Grotesk + IBM Plex Sans",
-  "Sora + DM Sans",
-  "Bricolage Grotesque + Manrope",
-  "Instrument Serif + Geist",
-  "Syne + Work Sans",
-  "Archivo Black + Karla",
-];
+export const MODEL = "gemini-3.1-flash-lite";
 
 export const keyPool = geminiRotator;
 
-export const SYSTEM_PROMPT = `You are the SENIOR CHIEF WEB ARCHITECT & CREATIVE DIRECTOR of LevelStudio (LevelUp Ecosystem) — an elite digital agency creating bespoke, award-winning, production-grade web applications.
-You do NOT act as a cold robotic code generator. You communicate with the warmth, authority, strategic reassurance, and passion of a world-class agency partner who genuinely cares about the client's business success.
+export const SYSTEM_PROMPT = `You are the Lead Web Architect of LevelStudio (LevelUp Ecosystem) — a senior agency professional producing bespoke, production-grade single-file websites.
+Tone: calm, precise, professional. No hype, no emojis, no exclamation marks. You write like a senior consultant, not a chatbot.
 
-EXECUTIVE AESTHETIC & ARCHITECTURAL STANDARDS
-1. Visual Polish & Mastery: Use modern Tailwind CSS classes, deep layered palettes (slate-950, zinc-950, deep indigo/violet/emerald accents), glassmorphic panels with backdrop-blur, refined borders (border-white/10), tasteful subtle glow effects, and modern Bento-grid arrangements.
-2. High-Calibre Copywriting: NO amateurish, dry, or beginner placeholder text. Write rich, captivating, domain-specific copy with authentic market vocabulary, clear value propositions, metric-driven highlights, and compelling calls-to-action.
-3. Interactive Components: Add real functioning dropdowns, tabs, interactive modals, filter pills, search inputs, calculators, and date/time pickers using clean vanilla JavaScript.
-4. Typography & Hierarchy: Elegant pairings with Google Fonts (e.g. Sora + DM Sans, Cormorant Garamond + Inter, Space Grotesk + Inter, Plus Jakarta Sans + Inter).
-5. Production Readiness: Single-file complete HTML5 with responsive mobile-first navigation, meta tags, and interactive demo modals:
-   "Mode Aperçu Interactif — Code source autonome prêt pour la production (Tailwind CSS & JavaScript Vanilla). Vous pouvez exporter le fichier .html complet ou le déployer directement."
-6. Image Polish: Use inline SVG for crisp vector icons; high-resolution photographic imagery from https://images.unsplash.com or https://picsum.photos/seed/<slug>/1200/800.
-7. Language Matching: ALWAYS mirror the visitor's language. If they talk in French, write everything in flawless, elegant, prestigious French.
+CONVERSATION DISCIPLINE (NON-NEGOTIABLE)
+- Turn 1 (ALWAYS): ONLY ask strategic questions. NEVER build on turn 1. Return kind="questions" with 4-5 precise questions covering: target audience and tone, core sections required, visual direction and palette, primary conversion goal, branding/content details (name, slogan, colours already in use).
+- Turn 2 onwards (after the user answered): build the FULL site. Return kind="site". Do not ask questions again unless the user explicitly asks for a redesign.
+- Never mix questions and html in one response.
+- Skip questions ONLY if the prompt explicitly says "skip questions and build now", or if this is a REFINEMENT of an existing site (CURRENT ACTIVE HTML CODE present), or if an IMPORTED HTML FILE is present (then modify that file as requested).
 
-CRITICAL: HOW YOU TALK ABOUT WHAT YOU CREATED (CLIENT REASSURANCE)
-When you build a site (Format B), your "text" message is your moment to present your work to the client, exactly as an elite agency Lead Architect does:
-1. Warm Executive Vision: Celebrate the project, state the artistic and commercial direction taken, and explain why this architecture will captivate their audience.
-2. Breakdown of Built Sections (Structure):
-   - Hero & Accroche: Explain the composition, the headline strategy, and the conversion funnel.
-   - Services / Bento Grid: Describe how their value proposition and offerings are highlighted with interactive cards.
-   - Preuve Sociale & Témoignages: Mention the trust badges, client reviews, or impact metrics.
-   - Conversion & Contact: Detail the interactive booking/lead form and footer navigation.
-3. Design System & Palette:
-   - Explain the chosen colors (e.g., Noir obsidienne, accents violet néon / cobalt, bordures translucides) and the psychological reassurance it conveys.
-4. Next Steps & Guidance:
-   - Reassure the user that the site is 100% responsive, ultra-fast, and fully self-contained.
-   - Encourage them to test the interactive canvas on the right, and invite them to request any fine-tuning (couleurs, textes, nouvelles fonctionnalités).
+IMPORTED HTML FILES
+- If the user attached an HTML file, treat it as the base. Apply the requested changes while preserving their structure, content and branding. Return the complete updated file.
+- If the imported file is too heavy or too complex to be reliably edited in one pass (framework bundles, thousands of lines, obfuscated code), return kind="refusal" with a short, courteous professional explanation and a concrete alternative (simplify the file, or request a production build via LevelUp Ecosystem). Do not apologise excessively.
 
-CONVERSATION DISCIPLINE
-- Turn 1: If brand-new project, ask 3 or 4 sharp, strategic architectural questions to decide design system, visual DNA, and key user flows.
-- Turn 2 or Refinement: Build the FULL updated site document. Never ask questions twice. Return kind="site".
+ABSOLUTE OUTPUT RULES FOR HTML (violations make the output unusable)
+1. The "html" value is a FINISHED, LITERAL HTML document. It is NOT a template, NOT JSX, NOT a JavaScript string. NEVER write placeholders such as \${...}, {[1,2,3].map(...)}, \`...\`.join(''), {{variable}}, <% %>, or "repeat for each". Write every card, every item, every list entry explicitly, in full, with unique real content.
+2. ZERO emojis anywhere in the site (no Unicode pictographs). Icons are inline SVG only (Lucide/Heroicons style, stroke 1.5-2).
+3. ZERO dead controls. Every <button> and <a> must do something: anchors point to a real section id on the page (#pricing, #contact...), buttons toggle a visible element (menu, accordion, tab, modal, form submit with inline confirmation). No href="#" without behaviour, no onclick="". Implement the JavaScript for every interactive element you add.
+4. Motion: include tasteful animations — a reveal-on-scroll system (IntersectionObserver adding a class), a subtle hero entrance (staggered fade/slide of headline, subheadline, CTAs), hover transitions on cards/buttons, and smooth anchor scrolling. Respect prefers-reduced-motion.
+5. Images: https://picsum.photos/seed/<unique-descriptive-slug>/1200/800 with unique slugs per image, always with loading="lazy" and descriptive alt. Logos/avatars: inline SVG or initials.
+6. Copy: domain-specific, professional, concrete (numbers, names, specifics). No lorem ipsum, no "Modality 1", no generic filler, no repeated sentences across cards.
+7. Language of the site copy mirrors the visitor's language. English UI if the visitor writes English, French if French.
+8. Single-file: Tailwind CDN + Google Fonts + vanilla JS. Mobile-first responsive navigation with a working hamburger menu. Full meta tags. Must END with </html>. Target 450-750 lines. Never truncate.
 
-OUTPUT FORMAT: Strict raw JSON with no markdown wrapping fences.
-Format A (Questions):
-{"kind":"questions","title":"<3-5 words title>","text":"<executive 1-2 sentence strategic greeting & guidance>","questions":[{"label":"...","multi":false,"options":["...","...","..."]}]}
-Format B (Site):
-{"kind":"site","title":"<3-5 words title>","style":"<design DNA>","text":"<rich, passionate, detailed Markdown presentation of the site, sections built, design choices, and reassurance>","suggestions":["<tweak 1>","<tweak 2>","<tweak 3>"],"html":"<!DOCTYPE html>...full complete code ending in </html>"}
-Format C (Refusal):
-{"kind":"refusal","text":"<polite sentence steering user back to web architecture>"}
+MANDATORY STRUCTURE WHEN BUILDING (at least 10 distinct <section> elements)
+- Sticky header: logo, 5-6 nav links to real sections, one CTA
+- Hero: headline, subheadline, two CTAs, trust line, visual
+- Logos / social proof strip (6 inline SVG wordmarks)
+- Features / services grid (6 explicit cards)
+- Process / how it works (3-4 numbered steps)
+- Showcase / interactive block (tabs, gallery, calculator or carousel — functional)
+- Metrics (4 KPIs)
+- Pricing or offers (3 tiers, full feature lists)
+- Testimonials (3 explicit quotes with name, role)
+- FAQ accordion (6 explicit items, functional)
+- Final CTA / contact form (functional inline confirmation)
+- Footer: 4 columns + legal line, and at the very bottom this exact badge:
+  <a href="https://levelup-ecosystem.com" target="_blank" rel="noopener" class="inline-flex items-center gap-2 text-xs opacity-70 hover:opacity-100 transition" data-testid="built-by-levelstudio"><span>Built with</span><strong>LevelStudio</strong><span>by LevelUp Ecosystem</span></a>
+Before answering, count your <section> tags (need 10+) and scan for \${, .map(, .join(, emojis — remove them.
+
+VISUAL STANDARDS
+Deep layered palettes adapted to the trade (not always violet), one accent colour, generous spacing, strong typographic hierarchy via Google Fonts pairings (Sora + DM Sans, Space Grotesk + Inter, Playfair Display + Inter, Manrope + Fraunces...), consistent radius, subtle borders, no gradients on text.
+
+OUTPUT FORMAT: strict raw JSON, no markdown fences.
+Format A (questions, turn 1):
+{"kind":"questions","title":"<3-5 words>","text":"<1-2 sentence professional opening>","questions":[{"label":"<question>","multi":false,"options":["<opt1>","<opt2>","<opt3>","<opt4>"]}, ... 4-5 total]}
+Format B (site, turn 2+):
+{"kind":"site","title":"<3-5 words>","style":"<design direction>","text":"<concise Markdown summary: what was built, structure, design choices — max 160 words, no emojis>","notes":["<short line about a decision taken>", ... 4-6 lines],"suggestions":["<tweak1>","<tweak2>","<tweak3>"],"html":"<!DOCTYPE html>...</html>"}
+Format C (refusal): {"kind":"refusal","text":"<courteous professional explanation + alternative>"}
 `;
 
-const ANALYSIS_SYSTEM = `You are the Executive Architectural Director of LevelStudio.
-Read the visitor's prompt and write ONE inspiring, highly professional paragraph (2-3 sentences, ~60 words) that captures their core ambition, commercial proposition, target market, and the bespoke aesthetic direction you will craft for them.
-Match the visitor's language exactly (French if French, English if English).
-Write in polished Markdown without bullet points or code fences.
-Conclude with a warm reassurance that you are designing their architectural framework now.
-`;
+const ANALYSIS_SYSTEM = `You are the Lead Web Architect of LevelStudio.
+Read the visitor's brief and write ONE professional paragraph (2 sentences, max 50 words) capturing their ambition, market and the design direction you intend to explore.
+Match the visitor's language. Plain Markdown, no bullet points, no emojis, no exclamation marks. End by stating that you will ask a few questions before designing.`;
+
+const INSPIRE_SYSTEM = `You are the Lead Web Architect of LevelStudio. Write ONE realistic, specific website brief (45-70 words) that a real business owner might send to an agency: business name, trade, city, target clients, 3-4 desired sections, tone and colour preference.
+Write in the language requested. Plain text, one paragraph, no quotes, no emojis, no bullet points.`;
 
 export interface ArchitectResult {
-  kind: "questions" | "site" | "refusal" | "error";
+  kind: "questions" | "site" | "refusal" | "error" | "overloaded";
   text: string;
   title?: string;
   style?: string;
+  notes?: string[];
   questions?: Array<{ label: string; multi: boolean; options: string[] }>;
   suggestions?: string[];
   html?: string;
+  cta?: { label: string; url: string } | null;
+  issues?: string[];
+}
+
+export const CONTACT_CTA = { label: "Contact LevelUp Ecosystem", url: "https://levelup-ecosystem.com/contact" };
+
+const EMOJI_RE = /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{1F900}-\u{1F9FF}\u{1F1E6}-\u{1F1FF}]/u;
+
+export function auditHtml(html: string): string[] {
+  const issues: string[] = [];
+  const withoutScripts = html.replace(/<script[\s\S]*?<\/script>/gi, "");
+  if (/\$\{[^}]*\}/.test(withoutScripts)) issues.push("Unrendered template placeholders (${...}) found in markup");
+  if (/\]\.map\(|\)\.join\(/.test(withoutScripts)) issues.push("JavaScript array code (.map/.join) leaked into markup");
+  if (/\{\{[^}]+\}\}/.test(withoutScripts)) issues.push("Mustache placeholders ({{...}}) found in markup");
+  if (EMOJI_RE.test(withoutScripts)) issues.push("Emoji characters found in site copy");
+  const sections = (html.match(/<section\b/gi) || []).length;
+  if (sections < 8) issues.push(`Only ${sections} <section> blocks (minimum 10 expected)`);
+  if (!/<\/html>\s*$/i.test(html.trim())) issues.push("Document does not end with </html>");
+  return issues;
+}
+
+export function stripEmojis(html: string): string {
+  return html.replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{1F900}-\u{1F9FF}\u{1F1E6}-\u{1F1FF}\u{FE0F}]/gu, "");
 }
 
 function extractJson(raw: string): any {
   let text = raw.trim();
   const fence = text.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/);
-  if (fence) {
-    text = fence[1].trim();
-  }
+  if (fence) text = fence[1].trim();
   try {
     return JSON.parse(text);
   } catch {
@@ -98,168 +109,153 @@ function extractJson(raw: string): any {
       try {
         return JSON.parse(text.substring(start, end + 1));
       } catch {
-        // fallback
+        // fall through
       }
     }
   }
   return null;
 }
 
+function isOverloadError(err: any): boolean {
+  const msg = String(err?.message || err || "");
+  return (
+    /429|503|RESOURCE_EXHAUSTED|UNAVAILABLE|high demand|quota|Rate limit|overloaded/i.test(msg) ||
+    geminiRotator.getStats().availableKeys === 0
+  );
+}
+
+export function overloadedResult(): ArchitectResult {
+  return {
+    kind: "overloaded",
+    text: "The studio is receiving a very high volume of requests right now and I would rather not deliver a rushed result. Please try again in a few minutes — your brief and answers are saved. If your project is time-sensitive, the LevelUp Ecosystem team can take it over directly.",
+    cta: CONTACT_CTA,
+  };
+}
+
+async function generate(prompt: string, maxOutputTokens: number, temperature: number): Promise<string> {
+  return geminiRotator.executeWithRotation(async (ai) => {
+    const resp = await ai.models.generateContent({
+      model: MODEL,
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
+      config: { temperature, maxOutputTokens },
+    });
+    return resp.text || "";
+  });
+}
+
 export async function quickAnalysis(userText: string, styleBrief: string = ""): Promise<string> {
   const trimmed = userText.trim();
   if (!trimmed) return "";
-
   try {
-    const text = await geminiRotator.executeWithRotation(async (ai) => {
-      const resp = await ai.models.generateContent({
-        model: "gemini-2.5-flash",
-        contents: [
-          {
-            role: "user",
-            parts: [
-              {
-                text: `${ANALYSIS_SYSTEM}
-
-User prompt:
-${trimmed}
-
-${styleBrief ? `Chosen Style DNA:\n${styleBrief}` : ""}`,
-              },
-            ],
-          },
-        ],
-        config: {
-          temperature: 0.7,
-          maxOutputTokens: 250,
-        },
-      });
-      return resp.text || "";
-    });
-    return text.trim();
+    const text = await generate(
+      `${ANALYSIS_SYSTEM}\n\nUser brief:\n${trimmed}\n\n${styleBrief ? `Chosen style direction:\n${styleBrief}` : ""}`,
+      220,
+      0.6,
+    );
+    return stripEmojis(text.trim());
   } catch {
     return "";
   }
+}
+
+export async function inspireBrief(services: string[], language: string = "English"): Promise<string> {
+  const focus = services.length ? `Trade/category to use: ${services.join(", ")}.` : "Pick any realistic local business.";
+  const seed = Math.random().toString(36).slice(2, 8);
+  const text = await generate(`${INSPIRE_SYSTEM}\n\nLanguage: ${language}. ${focus} Variation seed: ${seed}.`, 200, 1.0);
+  return stripEmojis(text.trim().replace(/^["']|["']$/g, ""));
+}
+
+export interface ImportedFile {
+  name: string;
+  html: string;
+}
+
+const IMPORT_MAX_BYTES = 180_000;
+const IMPORT_MAX_LINES = 2_600;
+
+export function assessImport(file: ImportedFile): { ok: true } | { ok: false; reason: string } {
+  const bytes = Buffer.byteLength(file.html, "utf-8");
+  const lines = file.html.split("\n").length;
+  const heavyFramework = /react(-dom)?(\.production)?\.min\.js|angular\.min\.js|vue(\.global)?\.min\.js|webpack|__NEXT_DATA__|data-reactroot|ng-version/i.test(file.html);
+  const minified = lines < 40 && bytes > 40_000;
+  if (bytes > IMPORT_MAX_BYTES) return { ok: false, reason: `the file weighs ${(bytes / 1024).toFixed(0)} KB, above the ${Math.round(IMPORT_MAX_BYTES / 1024)} KB I can rework reliably in a single pass` };
+  if (lines > IMPORT_MAX_LINES) return { ok: false, reason: `the file has ${lines} lines, above the ${IMPORT_MAX_LINES}-line ceiling for a safe single-pass edit` };
+  if (heavyFramework) return { ok: false, reason: "it is a compiled framework application (React/Vue/Angular bundle) rather than a static page" };
+  if (minified) return { ok: false, reason: "it is minified or obfuscated, which makes targeted edits unreliable" };
+  return { ok: true };
+}
+
+export function importRefusal(file: ImportedFile, reason: string): ArchitectResult {
+  return {
+    kind: "refusal",
+    text: `I have reviewed **${file.name}** and I would prefer not to edit it automatically: ${reason}. A single-pass AI edit on this kind of file tends to break layout or scripts, and I will not deliver work I cannot stand behind.\n\nTwo reliable options: send a lighter, static version of the page (under ${Math.round(IMPORT_MAX_BYTES / 1024)} KB), or hand the file to the LevelUp Ecosystem team for a manual production build.`,
+    cta: CONTACT_CTA,
+  };
 }
 
 export async function runArchitect(
   projectId: string,
   transcript: Array<{ role: string; text: string }>,
   currentHtml?: string | null,
-  attachments?: any[],
-  baseTemplate?: TemplateData | null
+  imported?: ImportedFile | null,
+  baseTemplate?: TemplateData | null,
 ): Promise<ArchitectResult> {
   const formattedTranscript = transcript.map((m) => `${m.role.toUpperCase()}: ${m.text}`).join("\n\n");
 
   let prompt = `PROJECT CONVERSATION HISTORY:\n${formattedTranscript}\n\n`;
 
-  if (currentHtml) {
-    prompt += `CURRENT ACTIVE HTML CODE (enhance, revise, or refine based on user request):\n${currentHtml.slice(0, 15000)}\n\n`;
+  if (imported) {
+    prompt += `IMPORTED HTML FILE "${imported.name}" (modify this file as requested, preserve its identity):\n${imported.html}\n\n`;
+  } else if (currentHtml) {
+    prompt += `CURRENT ACTIVE HTML CODE (refine based on the latest user request, keep everything else):\n${currentHtml.slice(0, 60000)}\n\n`;
   } else if (baseTemplate && baseTemplate.html) {
-    prompt += `BASE STARTER TEMPLATE CODE (use this as aesthetic and structural reference):\n${baseTemplate.html.slice(0, 15000)}\n\n`;
+    prompt += `BASE STARTER TEMPLATE (aesthetic and structural reference only):\n${baseTemplate.html.slice(0, 20000)}\n\n`;
   }
 
-  prompt += `TASK:
-As LevelStudio Lead Architect, carefully craft your response in raw JSON format according to SYSTEM_PROMPT.
-- If asking initial architectural questions, use Format A.
-- If delivering or updating the site, use Format B. Make sure your "text" is an eloquent, passionate, and reassuring presentation detailing what you designed, each section built, and why this design elevates their brand. The "html" must be full, production-ready, beautiful, and complete.`;
+  prompt += `TASK:\nRespond in raw JSON following the SYSTEM PROMPT. Format A for questions, Format B for a site, Format C for a refusal.`;
+
+  const attempt = async (extra: string): Promise<ArchitectResult | null> => {
+    const raw = await generate(`${SYSTEM_PROMPT}\n\n${prompt}${extra}`, 32768, 0.7);
+    const parsed = extractJson(raw);
+    if (!parsed || !parsed.kind) return null;
+    if (parsed.text) parsed.text = stripEmojis(String(parsed.text));
+    return parsed as ArchitectResult;
+  };
 
   try {
-    const rawOutput = await geminiRotator.executeWithRotation(async (ai) => {
-      const resp = await ai.models.generateContent({
-        model: "gemini-2.5-flash",
-        contents: [
-          {
-            role: "user",
-            parts: [{ text: `${SYSTEM_PROMPT}\n\n${prompt}` }],
-          },
-        ],
-        config: {
-          temperature: 0.7,
-          maxOutputTokens: 8192,
-        },
-      });
-      return resp.text || "";
-    });
-
-    const parsed = extractJson(rawOutput);
-    if (!parsed || !parsed.kind) {
-      // Fallback response with reassuring architectural tone
+    let result = await attempt("");
+    if (result?.kind === "site" && result.html) {
+      let issues = auditHtml(result.html);
+      const blocking = issues.filter((i) => !i.startsWith("Only") && !i.startsWith("Emoji"));
+      if (blocking.length) {
+        console.warn(`[Architect] Audit failed, regenerating once: ${blocking.join(" | ")}`);
+        const retry = await attempt(
+          `\n\nQUALITY CONTROL — your previous output was rejected for these defects: ${blocking.join("; ")}. Rewrite the complete site with every item written out literally. No template syntax, no emojis.`,
+        );
+        if (retry?.kind === "site" && retry.html) {
+          const retryIssues = auditHtml(retry.html);
+          if (retryIssues.filter((i) => !i.startsWith("Only") && !i.startsWith("Emoji")).length <= blocking.length) {
+            result = retry;
+            issues = retryIssues;
+          }
+        }
+      }
+      result.html = stripEmojis(result.html || "");
+      result.issues = issues;
+    }
+    if (!result) {
       return {
-        kind: "site",
-        title: "Architecture Web Personnalisée",
-        style: "Dark Luxe & Precision",
-        text: `### Bienvenue dans votre nouvel espace digital
-
-J'ai conçu pour votre projet une architecture web haute fidélité, inspirée des standards visuels des plus grands studios internationaux. 
-
-#### Ce qui a été intégré dans cette version :
-- **Hero Cinématique** : Une composition immersive avec un contraste élevé, typographie d'exception et appel à l'action immédiat.
-- **Grille Bento interactive** : Présentation structurée de vos compétences et prestations avec micro-interactions au survol.
-- **Preuve Sociale & Métriques** : Blocs de réassurance conçus pour instaurer une confiance instantanée auprès de vos prospects.
-- **Formulaire interactif sécurisé** : Prêt à collecter vos demandes de contact ou réservations.
-- **Design 100% Responsive** : Navigation fluide optimisée pour mobile, tablette et écrans retina.
-
-N'hésitez pas à explorer la maquette dans le canevas interactif ci-contre. Je reste à votre écoute si vous souhaitez ajuster la palette de couleurs, retoucher un texte ou ajouter un bloc sur-mesure !`,
-        suggestions: ["Ajuster la palette de couleurs", "Ajouter une section Témoignages", "Personnaliser le formulaire de contact"],
-        html: baseTemplate?.html || defaultSiteHtml("LevelStudio Bespoke Architecture"),
+        kind: "error",
+        text: "The model returned an unreadable response. Please send your message again — your brief is saved.",
       };
     }
-
-    return parsed;
+    return result;
   } catch (err: any) {
-    console.error("[Architect Error]", err);
+    console.error("[Architect Error]", err?.message || err);
+    if (isOverloadError(err)) return overloadedResult();
     return {
       kind: "error",
-      text: "Un incident technique est survenu lors de la compilation architecturale. Vos données sont conservées en toute sécurité.",
+      text: "The rendering studio hit a temporary error. Please resend your request in a moment — your brief and answers are kept.",
     };
   }
-}
-
-function defaultSiteHtml(title: string): string {
-  return `<!DOCTYPE html>
-<html lang="fr">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>${title}</title>
-<script src="https://cdn.tailwindcss.com"></script>
-<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;600;700;800&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
-<style>
-body { font-family: 'Plus Jakarta Sans', system-ui, sans-serif; }
-h1, h2, h3 { font-family: 'Space Grotesk', sans-serif; }
-</style>
-</head>
-<body class="bg-[#0A0A0F] text-slate-100 min-h-screen">
-<header class="sticky top-0 z-40 border-b border-white/10 bg-[#0A0A0F]/80 backdrop-blur-xl">
-  <div class="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
-    <div class="flex items-center gap-2.5">
-      <div class="size-8 rounded-xl bg-gradient-to-tr from-violet-600 to-indigo-500 grid place-items-center font-bold text-white shadow-lg shadow-violet-500/25">L</div>
-      <span class="font-heading font-bold text-lg text-white tracking-tight">${title}</span>
-    </div>
-    <nav class="hidden md:flex items-center gap-8 text-sm text-slate-300">
-      <a href="#services" class="hover:text-white transition">Services</a>
-      <a href="#about" class="hover:text-white transition">Expertise</a>
-      <a href="#contact" class="hover:text-white transition">Contact</a>
-    </nav>
-    <a href="#contact" class="rounded-full bg-violet-600 px-5 py-2 text-xs font-semibold text-white hover:bg-violet-500 transition shadow-lg shadow-violet-600/30">Prendre Contact</a>
-  </div>
-</header>
-<main class="max-w-6xl mx-auto px-6 py-20 text-center">
-  <div class="inline-flex items-center gap-2 rounded-full border border-violet-500/30 bg-violet-500/10 px-4 py-1.5 text-xs text-violet-300 mb-6">
-    <span class="size-2 rounded-full bg-violet-400 animate-pulse"></span>
-    Architecture Web Haute Précision
-  </div>
-  <h1 class="text-4xl sm:text-6xl font-extrabold tracking-tight text-white max-w-3xl mx-auto leading-tight">
-    L'expérience digitale conçue pour faire grandir votre marque.
-  </h1>
-  <p class="mt-6 text-base sm:text-lg text-slate-400 max-w-2xl mx-auto leading-relaxed">
-    Une présence en ligne sur-mesure, rapide, élégante et optimisée pour convertir vos visiteurs en partenaires de confiance.
-  </p>
-  <div class="mt-10 flex flex-wrap justify-center gap-4">
-    <a href="#contact" class="rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 px-7 py-3 text-sm font-semibold text-white shadow-xl shadow-violet-600/25 hover:from-violet-500 hover:to-indigo-500 transition">Découvrir nos solutions</a>
-    <a href="#services" class="rounded-xl border border-white/10 bg-white/5 px-7 py-3 text-sm font-medium text-slate-300 hover:bg-white/10 hover:text-white transition">Explorer nos services</a>
-  </div>
-</main>
-</body>
-</html>`;
 }

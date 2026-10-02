@@ -39,7 +39,6 @@ export default function ServiceRail({ selected, onToggle, disabled }: ServiceRai
 
   useEffect(() => {
     sync();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const nudge = (dir: -1 | 1) => {

@@ -1,10 +1,10 @@
 import { Router, type Request, type Response } from "express";
 import multer from "multer";
 import crypto from "crypto";
-import { db, type ProjectDoc, type Message, type Attachment, type Question, type Choice } from "../db.ts";
+import { db, type ProjectDoc, type Message, type Attachment, type ActivityEntry } from "../db.ts";
 import { getCurrentUser, ensureAnonCookie, ANON_COOKIE } from "./auth.ts";
 import { hardenImages, sanitizeImport } from "../html-utils.ts";
-import { runArchitect, quickAnalysis } from "../brain.ts";
+import { runArchitect, quickAnalysis, inspireBrief, assessImport, importRefusal, type ImportedFile } from "../brain.ts";
 import type { TemplateData } from "../templates.ts";
 import { geminiRotator } from "../lib/gemini.ts";
 
@@ -15,21 +15,19 @@ const upload = multer({
   storage: multer.memoryStorage(),
 });
 
-const DAILY_LIMIT = 20;
+const DAILY_LIMIT_ANON = 10;
+const DAILY_LIMIT_USER = 50;
 const SHARE_DAYS = 7;
 
-const STAGES = [
-  "Analysing your brief",
-  "Choosing the design direction",
-  "Laying out navigation and hero",
-  "Writing the page sections",
-  "Building the interactive screens",
-  "Tuning the mobile layout",
-  "Checking every section is complete",
-];
-
-const STAGE_FOCUS = [
-  "brief", "palette", "hero", "sections", "interactions", "mobile", "review",
+// Slow, deliberate activity feed — the architect is expected to take its time.
+const ACTIVITY_PLAN: Array<{ icon: ActivityEntry["icon"]; label: string; detail: string; after: number }> = [
+  { icon: "brief", label: "Reading the brief", detail: "Going through every answer and constraint before touching the layout.", after: 0 },
+  { icon: "search", label: "Studying the market", detail: "Identifying the vocabulary, trust signals and conversion patterns of this trade.", after: 6000 },
+  { icon: "palette", label: "Defining the design direction", detail: "Choosing palette, type pairing, spacing scale and motion language.", after: 14000 },
+  { icon: "layout", label: "Structuring the page", detail: "Ordering 10+ sections the way a visitor actually reads, from hero to footer.", after: 24000 },
+  { icon: "image", label: "Writing copy and selecting visuals", detail: "Real, specific copy for every block. Unique imagery per section.", after: 38000 },
+  { icon: "code", label: "Writing the code", detail: "Semantic HTML, Tailwind utilities, vanilla JS for every interactive element.", after: 54000 },
+  { icon: "bug", label: "Reviewing for defects", detail: "Scanning for dead buttons, placeholder syntax, missing sections and mobile issues.", after: 80000 },
 ];
 
 // Active background jobs: project_id -> abort controller
@@ -43,19 +41,45 @@ function getOwnerId(req: Request, res?: Response): string | null {
   return anon || null;
 }
 
-function getQuota(consume: boolean = false) {
+function hashId(value: string): string {
+  return crypto.createHash("sha256").update(value).digest("hex").slice(0, 24);
+}
+
+function clientIp(req: Request): string {
+  const fwd = String(req.headers["x-forwarded-for"] || "").split(",")[0].trim();
+  return fwd || req.ip || req.socket?.remoteAddress || "unknown";
+}
+
+// Anti-fraud: usage is tracked against the cookie, the IP and a browser fingerprint.
+// Clearing cookies or storage does not reset the counter — the highest counter wins.
+function quotaKeys(req: Request, ownerId: string | null, isAuthed: boolean): string[] {
   const day = db.getTodayString();
-  const used = consume ? db.incrementUsage(day) : db.getUsage(day);
-  const remaining = Math.max(DAILY_LIMIT - used, 0);
+  const keys = [`${day}::${ownerId || "anon"}`];
+  if (!isAuthed) {
+    keys.push(`${day}::ip:${hashId(clientIp(req))}`);
+    const fp = String(req.headers["x-client-fp"] || "").trim();
+    if (fp) keys.push(`${day}::fp:${hashId(fp)}`);
+  }
+  return keys;
+}
+
+function getQuota(req: Request, ownerId: string | null, isAuthed: boolean, consume: boolean = false) {
+  const day = db.getTodayString();
+  const limit = isAuthed ? DAILY_LIMIT_USER : DAILY_LIMIT_ANON;
+  const keys = quotaKeys(req, ownerId, isAuthed);
+  const counts = keys.map((k) => (consume ? db.incrementUsage(k) : db.getUsage(k)));
+  const used = Math.max(...counts);
+  const remaining = Math.max(limit - used, 0);
 
   const tomorrow = new Date();
   tomorrow.setUTCHours(24, 0, 0, 0);
 
   return {
     used,
-    limit: DAILY_LIMIT,
+    limit,
     remaining,
     day,
+    is_authed: isAuthed,
     resets_at: tomorrow.toISOString(),
   };
 }
@@ -65,8 +89,22 @@ architectRouter.get("/db/stats", (_req: Request, res: Response) => {
   res.json(db.getStats());
 });
 
-architectRouter.get("/quota", (_req: Request, res: Response) => {
-  res.json(getQuota());
+architectRouter.get("/quota", async (req: Request, res: Response) => {
+  const user = await getCurrentUser(req);
+  const ownerId = user?.user_id || req.cookies?.[ANON_COOKIE] || null;
+  res.json(getQuota(req, ownerId, Boolean(user)));
+});
+
+// Inspiration: a realistic brief the visitor can start from (does not consume quota)
+architectRouter.post("/inspire", async (req: Request, res: Response) => {
+  const services: string[] = Array.isArray(req.body?.services) ? req.body.services.slice(0, 3).map(String) : [];
+  const language = String(req.body?.language || "English").slice(0, 20);
+  try {
+    const brief = await inspireBrief(services, language);
+    res.json({ brief });
+  } catch (err: any) {
+    res.status(503).json({ detail: "The studio is busy right now. Please try again in a moment." });
+  }
 });
 
 // Templates list
@@ -379,11 +417,12 @@ architectRouter.post("/chat", async (req: Request, res: Response) => {
     return;
   }
 
-  const quota = getQuota();
+  const quota = getQuota(req, ownerId, Boolean(user));
   if (quota.remaining <= 0) {
     res.status(429).json({
-      detail:
-        "We have reached the studio's build budget for today. Every project you started is saved in your workspace.",
+      detail: user
+        ? `You have reached your daily allowance of ${quota.limit} generations. It resets at midnight UTC.`
+        : `The guest allowance of ${quota.limit} generations per day has been reached. Sign in for ${DAILY_LIMIT_USER} per day.`,
     });
     return;
   }
@@ -447,11 +486,42 @@ architectRouter.post("/chat", async (req: Request, res: Response) => {
   };
   project.messages.push(userMsg);
 
+  // Imported HTML file: assess complexity before spending a generation
+  const htmlAttachment = scannedAttachments.find(
+    (a) => a.kind === "text" && a.data && (/\.html?$/i.test(a.name) || /^\s*<!doctype html|^\s*<html/i.test(a.data)),
+  );
+  const imported: ImportedFile | null = htmlAttachment ? { name: htmlAttachment.name, html: htmlAttachment.data } : null;
+  if (imported) {
+    const verdict = assessImport(imported);
+    if (!verdict.ok) {
+      const refusal = importRefusal(imported, verdict.reason);
+      project.messages.push({
+        id: crypto.randomUUID(),
+        role: "assistant",
+        kind: "refusal",
+        text: refusal.text,
+        questions: [],
+        attachments: [],
+        site_name: null,
+        site_style: null,
+        suggestions: [],
+        html: null,
+        cta: refusal.cta ?? null,
+        created_at: new Date().toISOString(),
+      });
+      project.updated_at = new Date().toISOString();
+      db.scheduleSave();
+      void db.syncProjectToFirestore(project);
+      res.json({ project, quota });
+      return;
+    }
+  }
+
   // Quick analysis on first turn
   const baseTemplate = project.template_id ? db.templates.get(project.template_id) || null : null;
   const isFirstTurn = !project.messages.slice(0, -1).some((m) => m.kind === "questions" || m.kind === "site");
 
-  if (isFirstTurn && userText) {
+  if (isFirstTurn && userText && !imported) {
     const styleBrief = baseTemplate?.kind === "style" ? baseTemplate.brief_prompt || "" : "";
     try {
       const note = await quickAnalysis(userText, styleBrief);
@@ -476,24 +546,29 @@ architectRouter.post("/chat", async (req: Request, res: Response) => {
   }
 
   project.generating = true;
-  project.progress = STAGES[0];
+  project.progress = ACTIVITY_PLAN[0].label;
   project.progress_step = 0;
-  project.progress_pct = 1;
-  project.progress_focus = STAGE_FOCUS[0];
+  project.progress_pct = 0;
+  project.progress_focus = null;
+  project.activity = [];
   project.updated_at = new Date().toISOString();
   db.scheduleSave();
   void db.syncProjectToFirestore(project);
 
-  // Consume 1 quota unit
-  const updatedQuota = getQuota(true);
+  // Consume 1 quota unit (cookie + IP + fingerprint)
+  const updatedQuota = getQuota(req, ownerId, Boolean(user), true);
 
   // Start background build
-  startBackgroundBuild(project, baseTemplate);
+  startBackgroundBuild(project, baseTemplate, imported);
 
   res.json({ project, quota: updatedQuota });
 });
 
-function startBackgroundBuild(project: ProjectDoc, baseTemplate: TemplateData | null) {
+function entry(icon: ActivityEntry["icon"], label: string, detail: string, status: ActivityEntry["status"] = "done"): ActivityEntry {
+  return { id: crypto.randomUUID(), icon, label, detail, at: new Date().toISOString(), status };
+}
+
+function startBackgroundBuild(project: ProjectDoc, baseTemplate: TemplateData | null, imported: ImportedFile | null) {
   let isAborted = false;
   const abort = () => {
     isAborted = true;
@@ -516,28 +591,48 @@ function startBackgroundBuild(project: ProjectDoc, baseTemplate: TemplateData | 
     }
   }
 
-  // Run progress ticker and generation concurrently
-  let step = 0;
-  let pct = 5;
+  // Activity feed: deliberate pacing, one running entry at a time
+  const isQuestionTurn = !project.messages.some((m) => m.kind === "questions" || m.kind === "site") && !imported && !project.html;
+  const plan = isQuestionTurn ? ACTIVITY_PLAN.slice(0, 2) : ACTIVITY_PLAN;
+  const started = Date.now();
+  const activity: ActivityEntry[] = [];
+  project.activity = activity;
   const interval = setInterval(() => {
     if (isAborted) {
       clearInterval(interval);
       return;
     }
-    pct = Math.min(pct + 7, 95);
-    step = Math.min(step + 1, STAGES.length - 1);
-    project.progress = STAGES[step];
-    project.progress_step = step;
-    project.progress_pct = pct;
-    project.progress_focus = STAGE_FOCUS[step];
-    project.updated_at = new Date().toISOString();
-  }, 2000);
+    const elapsed = Date.now() - started;
+    const due = plan.filter((p) => p.after <= elapsed).length;
+    if (due > activity.length) {
+      activity.forEach((a) => (a.status = "done"));
+      const next = plan[activity.length];
+      activity.push(entry(next.icon, next.label, next.detail, "running"));
+      project.progress = next.label;
+      project.progress_step = activity.length - 1;
+      project.updated_at = new Date().toISOString();
+    }
+  }, 1000);
 
-  runArchitect(project.id, transcript, project.html, [], baseTemplate)
+  runArchitect(project.id, transcript, imported ? null : project.html, imported, baseTemplate)
     .then((result) => {
       clearInterval(interval);
       activeJobs.delete(project.id);
       if (isAborted) return;
+
+      activity.forEach((a) => (a.status = "done"));
+      if (result.kind === "site" && result.html) {
+        for (const note of result.notes || []) activity.push(entry("palette", "Design decision", String(note)));
+        const issues = result.issues || [];
+        const sections = (result.html.match(/<section\b/gi) || []).length;
+        const lines = result.html.split("\n").length;
+        if (issues.length) {
+          activity.push(entry("bug", "Defects corrected", issues.join(" · "), "warning"));
+        }
+        activity.push(entry("check", "Final review", `${sections} sections, ${lines} lines of code, interactive elements wired, LevelStudio badge in place.`));
+      } else if (result.kind === "questions") {
+        activity.push(entry("check", "Brief clarified", "A few targeted questions before any design work begins."));
+      }
 
       const replyMsg: Message = {
         id: crypto.randomUUID(),
@@ -558,6 +653,8 @@ function startBackgroundBuild(project: ProjectDoc, baseTemplate: TemplateData | 
         site_style: result.style || null,
         suggestions: result.suggestions || [],
         html: result.html ? hardenImages(result.html) : null,
+        activity: [...activity],
+        cta: result.cta ?? null,
         created_at: new Date().toISOString(),
       };
 
@@ -573,6 +670,7 @@ function startBackgroundBuild(project: ProjectDoc, baseTemplate: TemplateData | 
       project.progress_step = 0;
       project.progress_pct = 0;
       project.progress_focus = null;
+      project.activity = [];
       project.updated_at = new Date().toISOString();
       db.scheduleSave();
       void db.syncProjectToFirestore(project);
@@ -587,7 +685,7 @@ function startBackgroundBuild(project: ProjectDoc, baseTemplate: TemplateData | 
         id: crypto.randomUUID(),
         role: "assistant",
         kind: "error",
-        text: "The studio could not reach the design engine just now. Send your request again and I will pick it straight back up.",
+        text: "The rendering studio hit a temporary error. Please resend your request in a moment — your brief and answers are kept.",
         questions: [],
         attachments: [],
         site_name: null,
@@ -601,6 +699,7 @@ function startBackgroundBuild(project: ProjectDoc, baseTemplate: TemplateData | 
       project.progress_step = 0;
       project.progress_pct = 0;
       project.progress_focus = null;
+      project.activity = [];
       project.updated_at = new Date().toISOString();
       db.scheduleSave();
       void db.syncProjectToFirestore(project);
